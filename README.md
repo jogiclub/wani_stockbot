@@ -11,8 +11,8 @@ uvicorn main:app --reload
 KRX live collection requires credentials:
 
 ```bash
-$env:KRX_ID="jogiclub"
-$env:KRX_PW="!Inpion00"
+$env:KRX_ID=""
+$env:KRX_PW=""
 ```
 
 ## Endpoints
