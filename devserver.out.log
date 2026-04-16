@@ -1,0 +1,9 @@
+INFO:     127.0.0.1:53763 - "GET /health HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53378 - "POST /screen/live HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:53379 - "POST /screen HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54918 - "GET / HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:54918 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     127.0.0.1:50819 - "GET /docs HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50819 - "GET /openapi.json HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59789 - "POST /screen/live HTTP/1.1" 503 Service Unavailable
+INFO:     127.0.0.1:59789 - "POST /screen/live HTTP/1.1" 503 Service Unavailable
