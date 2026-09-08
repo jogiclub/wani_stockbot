@@ -1,0 +1,847 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>세력 추정 매매법 스크리너 · 왔니 주식</title>
+<link rel="stylesheet" href="/static/common.css">
+<script src="/static/gnb.js"></script>
+<script src="/static/session.js"></script>
+<style>
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 20px 60px; }
+  .page-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 18px; }
+  h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; }
+  h1 span { color: var(--text-muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
+  .spacer { flex: 1 1 auto; }
+
+  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+           gap: 10px; margin-bottom: 18px; }
+  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .tile .label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
+  .tile .value { font-size: 26px; font-weight: 650; letter-spacing: -.02em;
+                 font-variant-numeric: tabular-nums; }
+  .tile .value small { font-size: 13px; font-weight: 500; color: var(--text-muted); margin-left: 3px; }
+
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
+  .tab { padding: 9px 14px; border: 0; background: none; color: var(--text-secondary);
+         border-bottom: 2px solid transparent; border-radius: 0; font-weight: 500; }
+  .tab[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 650; }
+  .tab .count { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+                background: var(--surface-2); font-size: 11px; color: var(--text-secondary); }
+
+  .panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
+  .table-scroll { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 10px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+  th { font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--surface-2);
+       position: sticky; top: 0; text-align: right; }
+  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: var(--surface-2); }
+  tbody tr[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  tbody tr:last-child td { border-bottom: 0; }
+  .sym { font-weight: 650; }
+  .muted { color: var(--text-muted); }
+  .up { color: var(--up); font-weight: 600; }
+  .down { color: var(--down); font-weight: 600; }
+  .empty { padding: 48px 20px; text-align: center; color: var(--text-muted); }
+
+  /* 상세 패널 */
+  .detail { margin-top: 14px; background: var(--surface-1); border: 1px solid var(--border);
+            border-radius: 12px; padding: 16px; }
+  .detail-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 4px; }
+  .detail-head h2 { font-size: 17px; margin: 0; }
+  .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+                 gap: 10px 16px; margin: 14px 0 6px; }
+  .detail-grid div { font-size: 12px; color: var(--text-muted); }
+  .detail-grid strong { display: block; font-size: 15px; color: var(--text-primary);
+                        font-weight: 600; font-variant-numeric: tabular-nums; }
+  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
+  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+  .chart-box { position: relative; margin-top: 10px; }
+  svg { display: block; width: 100%; height: auto; }
+  .tooltip { position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s;
+             background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+             padding: 8px 10px; font-size: 12px; line-height: 1.55; white-space: nowrap;
+             box-shadow: 0 4px 16px rgba(0,0,0,.18); font-variant-numeric: tabular-nums; z-index: 5; }
+  .tooltip b { display: block; margin-bottom: 3px; }
+  dl.cfg { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+           gap: 8px 20px; margin: 0; padding: 16px; }
+  dl.cfg > div { display: flex; justify-content: space-between; gap: 12px;
+                 border-bottom: 1px dashed var(--border); padding-bottom: 6px; font-size: 13px; }
+  dl.cfg dt { color: var(--text-secondary); }
+  dl.cfg dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .warn-bar { background: color-mix(in srgb, var(--warning) 16%, transparent);
+              border: 1px solid var(--warning); color: var(--text-primary);
+              padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 13px; }
+  .warn-bar b { margin-right: 6px; }
+  .score { display: inline-flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; }
+  .score b { font-size: 17px; font-weight: 700; }
+  .score .g { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 5px; color: #fff; }
+  .g-Ap, .g-A { background: var(--good); }
+  .g-B { background: var(--accent); }
+  .g-C { background: var(--warning); color: #111; }
+  .g-D { background: var(--critical); }
+  .bar { height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; min-width: 74px; }
+  .bar i { display: block; height: 100%; background: var(--accent); }
+  .regime { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px;
+            border-radius: 10px; margin-bottom: 14px; font-size: 13px; border: 1px solid var(--border);
+            background: var(--surface-1); }
+  .regime[hidden] { display: none; }
+  .regime.off { background: color-mix(in srgb, var(--critical) 12%, transparent); border-color: var(--critical); }
+  .regime.on  { background: color-mix(in srgb, var(--good) 12%, transparent); border-color: var(--good); }
+  .breakdown { width: 100%; margin-top: 4px; }
+  .breakdown td { border: 0; padding: 5px 8px 5px 0; }
+  .breakdown td:first-child { color: var(--text-secondary); width: 110px; }
+  .breakdown td:nth-child(2) { width: 90px; }
+  .breakdown td:nth-child(3) { text-align: left; font-weight: 600; width: 70px; }
+  .breakdown td:last-child { text-align: left; color: var(--text-muted); font-size: 12px; white-space: normal; }
+  .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
+         font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--warning) 28%, transparent);
+         color: var(--text-primary); }
+  /* 가이드 탭 */
+  .guide { padding: 20px 22px; line-height: 1.75; }
+  .guide h3 { font-size: 15px; margin: 26px 0 10px; padding-bottom: 6px;
+              border-bottom: 1px solid var(--border); }
+  .guide h3:first-child { margin-top: 0; }
+  .guide p { margin: 0 0 10px; color: var(--text-secondary); }
+  .guide table { margin: 8px 0 4px; }
+  .guide table td, .guide table th { white-space: normal; }
+  .guide table th.l, .guide table td.l { text-align: left; }
+  .guide code { background: var(--surface-2); padding: 2px 6px; border-radius: 5px; font-size: 13px; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .step { background: var(--surface-2); border-radius: 10px; padding: 14px 16px; }
+  .step .n { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .06em; }
+  .step h4 { margin: 3px 0 6px; font-size: 15px; }
+  .step p { font-size: 13px; margin-bottom: 8px; }
+  .step ul { margin: 0; padding-left: 17px; font-size: 12.5px; color: var(--text-secondary); }
+  .step li { margin-bottom: 3px; }
+  .callout { border-left: 3px solid var(--accent); background: var(--surface-2);
+             padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 13px; }
+  .callout.warn { border-left-color: var(--warning); }
+  .callout.bad { border-left-color: var(--critical); }
+  .callout b { display: block; margin-bottom: 4px; }
+  .pos { background: var(--surface-2); border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
+  .pos-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+  .pos label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px; }
+  .pos input, .pos select { font: inherit; padding: 7px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
+    width: 150px; font-variant-numeric: tabular-nums; }
+  .pos-out { margin-top: 12px; display: grid; gap: 8px 18px;
+             grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+  .pos-out div { font-size: 12px; color: var(--text-muted); }
+  .pos-out strong { display: block; font-size: 17px; color: var(--text-primary);
+                    font-weight: 650; font-variant-numeric: tabular-nums; }
+  .ok { color: var(--good); font-weight: 600; }
+  a.toss { color: inherit; text-decoration: underline dotted var(--text-muted);
+           text-underline-offset: 3px; }
+  a.toss:hover { color: var(--accent); text-decoration-color: var(--accent); }
+  a.toss.sym { font-weight: 650; }
+  .toss-btn { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 8px;
+              border: 1px solid var(--border); background: var(--surface-2);
+              color: var(--text-secondary); text-decoration: none; }
+  .toss-btn:hover { border-color: var(--accent); color: var(--accent); }
+  .order-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+               margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
+  button.danger { background: var(--critical); border-color: transparent; }
+  button.danger:hover:not(:disabled) { filter: brightness(1.1); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .od { margin-top: 12px; padding: 12px 14px; border-radius: 10px; font-size: 13px;
+        background: var(--surface-1); border: 1px solid var(--border); }
+  .od.good { border-color: var(--good); background: color-mix(in srgb, var(--good) 10%, transparent); }
+  .od.bad { border-color: var(--critical); background: color-mix(in srgb, var(--critical) 10%, transparent); }
+  .od ul { margin: 0; padding-left: 18px; }
+  .od li { margin-bottom: 3px; }
+  .od code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+  th[title] { cursor: help; text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; }
+  footer { margin-top: 22px; font-size: 12px; color: var(--text-muted); text-align: center; }
+</style>
+</head>
+<body>
+<div data-gnb="screener"></div>
+
+<!-- GNB 우측으로 옮겨질 공통 컨트롤 (gnb.js 가 이동시킨다) -->
+<span class="badge" id="status" data-gnb-action><span class="dot"></span><span id="status-text">연결 중…</span></span>
+<button data-settings-btn title="내 토스 API 키 설정" data-gnb-action hidden>⚙ 설정</button>
+
+<div class="wrap">
+  <div class="page-head">
+    <h1>세력 추정 매매법 스크리너<span id="mode-label"></span></h1>
+    <div class="spacer"></div>
+    <button class="primary" id="scan-btn">지금 스캔</button>
+  </div>
+
+  <div id="setup" class="setup-bar" hidden></div>
+  <div id="err" class="err-bar" hidden></div>
+  <div id="blocked" class="warn-bar" hidden></div>
+  <div id="regime" class="regime" hidden></div>
+
+  <section class="tiles" aria-label="요약">
+    <div class="tile"><div class="label">매수 시그널</div><div class="value" id="t-signals">–</div></div>
+    <div class="tile"><div class="label">돌파 대기</div><div class="value" id="t-watch">–</div></div>
+    <div class="tile"><div class="label">판정 종목</div><div class="value" id="t-scanned">–</div></div>
+    <div class="tile"><div class="label">필터 제외</div><div class="value" id="t-skipped">–</div></div>
+    <div class="tile"><div class="label">마지막 스캔</div><div class="value" id="t-last" style="font-size:17px">–</div></div>
+    <div class="tile"><div class="label">다음 스캔</div><div class="value" id="t-next" style="font-size:17px">–</div></div>
+  </section>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" data-tab="signals" aria-selected="true">매수 시그널<span class="count" id="c-signals">0</span></button>
+    <button class="tab" role="tab" data-tab="watch" aria-selected="false">돌파 대기<span class="count" id="c-watch">0</span></button>
+    <button class="tab" role="tab" data-tab="config" aria-selected="false">전략 설정</button>
+    <button class="tab" role="tab" data-tab="guide" aria-selected="false">가이드 · 근거</button>
+  </div>
+
+  <div class="panel" id="view"></div>
+  <div id="detail"></div>
+
+  <footer>투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 데이터: 토스증권 OpenAPI</footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const fmt = (n, d = 0) => n == null || Number.isNaN(n) ? "–" :
+  Number(n).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+// ?tab=guide 처럼 URL 로 탭을 바로 열 수 있다 (딥링크·북마크용)
+const URL_TAB = new URLSearchParams(location.search).get("tab");
+let STATE = null, TAB = ["signals", "watch", "config", "guide"].includes(URL_TAB) ? URL_TAB : "signals",
+    SELECTED = null, CFG = null, NEXT_AT = null;
+
+/* 테마 토글은 공통 GNB(gnb.js)가 담당한다. 여기서는 색이 바뀌면
+   인라인 SVG 차트를 다시 그려 주기만 한다. */
+document.addEventListener("themechange", () => { if (SELECTED) renderDetail(SELECTED); });
+
+/* ------------------------------------------------------------------ 데이터 */
+async function refresh() {
+  try {
+    const r = await fetch("/api/state");
+    STATE = await r.json();
+    $("#err").hidden = !STATE.error;
+    if (STATE.error) $("#err").textContent = "스캔 오류: " + STATE.error;
+    const g = STATE.regime || {};
+    const rg = $("#regime");
+    rg.hidden = !g.available;
+    if (g.available) {
+      rg.className = "regime " + (g.on ? "on" : "off");
+      rg.innerHTML = `<b>시장 국면 ${g.on ? "우호 ✅" : "비우호 ⚠"}</b>
+        <span>${g.symbol} ${fmt(g.close, 2)} / ${g.ma}일선 ${fmt(g.ma_value, 2)}
+        (${g.gap_pct > 0 ? "+" : ""}${g.gap_pct}%)</span>
+        <span class="muted">${g.on
+          ? "백테스트상 이 국면의 시그널 평균 +0.173R"
+          : "이 국면의 시그널은 백테스트 평균 −0.117R — 신규 진입 자제 권장"}</span>`;
+    }
+    const blocked = STATE.blocked || [];
+    $("#blocked").hidden = !blocked.length;
+    if (blocked.length) {
+      $("#blocked").innerHTML = `<b>⚠ 매수 유의 종목 ${blocked.length}건 제외</b>` +
+        blocked.map(b => `${b["종목명"]}(${b["종목코드"]}) — ${b["사유"]}`).join(" · ");
+    }
+    if (STATE.finished_at) NEXT_AT = Date.now() + STATE.interval * 1000;
+    paint();
+  } catch (e) {
+    setStatus("err", "서버 연결 끊김");
+  }
+}
+
+function setStatus(kind, text) {
+  const el = $("#status");
+  el.className = "badge " + kind;
+  $("#status-text").textContent = text;
+}
+
+function paint() {
+  const s = STATE;
+  if (s.configured === false) {          // 아직 쓸 수 있는 자격증명이 없다
+    setStatus("err", "API 키 필요");
+    $("#mode-label").textContent = "";
+    ["#t-signals", "#t-watch", "#t-scanned", "#t-skipped", "#t-last", "#t-next"]
+      .forEach(id => $(id).textContent = "–");
+    $("#c-signals").textContent = "0"; $("#c-watch").textContent = "0";
+    $("#scan-btn").disabled = false;
+    $("#view").innerHTML = `<div class="empty">토스증권 API 키를 등록하면 스캔이 시작됩니다.</div>`;
+    $("#detail").innerHTML = "";
+    return;
+  }
+  $("#setup").hidden = true;
+  setStatus(s.running ? "busy" : s.error ? "err" : "live",
+            s.running ? "스캔 중…" : s.error ? "오류" : "감시 중");
+  $("#mode-label").textContent =
+    `${s.top ? "거래대금 상위 " + s.top + "종목" : "전체 유니버스"} · ${s.interval}초 주기 · `
+    + `${s.live ? "장중 실시간" : "일봉 종가"} 기준`;
+  $("#t-signals").innerHTML = fmt(s.signals.length) + "<small>건</small>";
+  $("#t-watch").innerHTML = fmt(s.watch.length) + "<small>건</small>";
+  $("#t-scanned").innerHTML = fmt(s.scanned) + "<small>종목</small>";
+  $("#t-skipped").innerHTML = fmt(s.skipped) + "<small>종목</small>";
+  $("#t-last").textContent = s.finished_at ? s.finished_at.slice(11) : "–";
+  $("#c-signals").textContent = s.signals.length;
+  $("#c-watch").textContent = s.watch.length;
+  $("#scan-btn").disabled = s.running;
+  renderTab();
+  // 첫 결과가 오면 1위 종목을 자동으로 펼쳐 차트를 바로 보여준다.
+  if (!SELECTED && s.signals.length && TAB === "signals") selectSignal(s.signals[0]);
+}
+
+setInterval(() => {
+  if (!NEXT_AT || !STATE) return;
+  const left = Math.max(0, Math.round((NEXT_AT - Date.now()) / 1000));
+  $("#t-next").textContent = STATE.running ? "진행 중" : `${left}초`;
+}, 1000);
+
+/* ------------------------------------------------------------------ 탭 */
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.setAttribute("aria-selected", String(btn.dataset.tab === TAB));
+  btn.onclick = () => {
+    TAB = btn.dataset.tab;
+    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+    renderTab();
+  };
+});
+
+function renderTab() {
+  if (!STATE) return;
+  if (TAB === "signals") renderSignals();
+  else if (TAB === "watch") renderWatch();
+  else if (TAB === "guide") renderGuide();
+  else renderConfig();
+}
+
+/* 토스증권 종목 페이지를 새 창으로 연다.
+   행 클릭(상세 열기)과 겹치지 않도록 stopPropagation 한다. */
+const tossUrl = (symbol) => `https://www.tossinvest.com/stocks/${encodeURIComponent(symbol)}`;
+
+function tossLink(r, text, cls = "") {
+  const code = r["종목코드"];
+  return `<a class="toss ${cls}" href="${tossUrl(code)}" target="_blank" rel="noopener noreferrer"
+     title="토스증권에서 ${r["종목명"]}(${code}) 열기" onclick="event.stopPropagation()">${text}</a>`;
+}
+
+const TIPS = {
+  "점수": "6개 요인을 백테스트 실측 성과로 채점한 100점 만점 점수. 75점이 실전 컷오프입니다.",
+  "기준봉일": "세력 매집으로 추정되는 대량거래 윗꼬리 캔들이 발생한 날",
+  "윗꼬리": "(고가 − max(시가,종가)) ÷ (고가 − 저가). 위에서 물량을 받아낸 정도. 55~65%가 실측 최상",
+  "기준봉 거래량": "기준봉 거래량 ÷ 직전 20일 평균 거래량. 50~100배가 실측 최상",
+  "조정": "기준봉 이후 경과 영업일. 2일이 실측 최상, 길수록 나빠집니다",
+  "전일고가": "돌파 기준선. 이 가격을 거래량과 함께 넘는 순간이 매수 시점",
+  "현재가": "현재가가 매수가보다 크게 높으면 이미 떠난 자리 — 추격 금지",
+  "거래량 증가": "당일 거래량 ÷ 전일 거래량 − 1",
+  "매수가": "전일 고가 = 돌파 확인 가격",
+  "손절가": "기준봉 저가. 이 값이 깨지면 매집 논리가 무너진 것 — 예외 없이 정리",
+  "손절폭": "(매수가 − 손절가) ÷ 매수가. 8% 이하가 실측 최상, 18% 초과는 손실 구간",
+  "감시 돌파가(전일고가)": "이 가격을 거래량과 함께 넘으면 매수 시그널로 전환됩니다",
+  "기준봉 저가(손절)": "진입 시 적용될 손절가",
+  "조정 거래량비": "조정 구간 평균 거래량 ÷ 기준봉 거래량. 0.10~0.20이 실측 최상",
+  "경과": "기준봉 이후 경과 영업일",
+};
+
+function table(cols, rows, rowFn, onClick) {
+  if (!rows.length) return `<div class="empty">해당 조건의 종목이 없습니다.</div>`;
+  const head = cols.map(c => `<th${TIPS[c] ? ` title="${TIPS[c]}"` : ""}>${c}</th>`).join("");
+  const body = rows.map((r, i) => `<tr data-i="${i}" ${onClick ? "" : 'style="cursor:default"'}
+      aria-selected="${SELECTED && SELECTED["종목코드"] === r["종목코드"]}">${rowFn(r)}</tr>`).join("");
+  return `<div class="table-scroll"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+}
+
+function renderSignals() {
+  const rows = STATE.signals;
+  $("#view").innerHTML = table(
+    ["점수", "종목코드", "종목명", "기준봉일", "윗꼬리", "기준봉 거래량", "조정", "전일고가", "현재가", "거래량 증가", "매수가", "손절가", "손절폭"],
+    rows,
+    r => `<td>${scoreCell(r)}</td>
+      <td>${tossLink(r, r["종목코드"], "sym")}</td>
+      <td>${tossLink(r, r["종목명"])}${(r["유의사항"] || [])
+        .map(w => `<span class="tag">${w}</span>`).join("")}</td>
+      <td class="muted">${r["기준봉일"].slice(5)}</td>
+      <td>${r["기준봉_윗꼬리%"]}%</td>
+      <td>×${r["기준봉_거래량배수"]}</td>
+      <td class="muted">${r["조정일수"]}일</td>
+      <td>${fmt(r["전일고가"])}</td>
+      <td class="${r["현재가"] >= r["전일고가"] ? "up" : "down"}">${fmt(r["현재가"])}</td>
+      <td class="up">+${fmt(r["거래량증가율%"])}%</td>
+      <td>${fmt(r["매수가"])}</td>
+      <td class="down">${fmt(r["손절가"])}</td>
+      <td class="muted">${r["손절폭%"]}%</td>`,
+    true);
+  bindRows(rows, r => selectSignal(r));
+}
+
+function scoreCell(r) {
+  if (r["점수"] == null) return "–";
+  const cls = "g-" + (r["등급"] || "").replace("+", "p");
+  return `<div class="score"><b>${r["점수"]}</b><span class="g ${cls}">${r["등급"]}</span></div>
+          <div class="bar"><i style="width:${r["점수"]}%"></i></div>`;
+}
+
+function renderWatch() {
+  const rows = STATE.watch;
+  $("#view").innerHTML = table(
+    ["종목코드", "종목명", "기준봉일", "경과", "감시 돌파가(전일고가)", "기준봉 저가(손절)", "조정 거래량비"],
+    rows,
+    r => `<td>${tossLink(r, r["종목코드"], "sym")}</td><td>${tossLink(r, r["종목명"])}</td>
+      <td class="muted">${r["기준봉일"].slice(5)}</td>
+      <td class="muted">${r["경과일"]}일</td>
+      <td class="up">${fmt(r["감시_돌파가(전일고가)"])}</td>
+      <td class="down">${fmt(r["기준봉저가(손절)"])}</td>
+      <td>${r["조정거래량비"]}</td>`,
+    true);
+  bindRows(rows, r => selectWatch(r));
+}
+
+function bindRows(rows, fn) {
+  $("#view").querySelectorAll("tbody tr").forEach(tr =>
+    tr.onclick = () => fn(rows[+tr.dataset.i]));
+}
+
+const CFG_LABEL = {
+  bottom_lookback: "바닥권 조회기간(일)", bottom_drawdown_min: "최소 하락률",
+  ma_long: "장기 이동평균", ma_long_band: "장기선 근접 배수",
+  upper_tail_min: "윗꼬리 최소 비율", vol_lookback: "거래량 비교기간(일)",
+  vol_mult_min: "기준봉 거래량 배수", base_range_min: "기준봉 최소 변동폭",
+  adjust_min_days: "조정 최소일", adjust_max_days: "조정 최대일",
+  adjust_vol_max_ratio: "조정 거래량 상한비", adjust_max_gain: "조정 중 최대 상승",
+  trigger_vol_ratio: "돌파 거래량 배수", trigger_break_buffer: "돌파 버퍼",
+  stop_mode: "손절 기준", min_price: "최소 주가", max_price: "최대 주가",
+  min_avg_turnover: "최소 거래대금", max_market_cap: "최대 시가총액",
+  min_history: "최소 일봉 수", markets: "대상 시장",
+};
+
+async function renderConfig() {
+  if (!CFG) CFG = await (await fetch("/api/config")).json();
+  const items = Object.entries(CFG_LABEL).map(([k, label]) => {
+    let v = CFG[k];
+    if (Array.isArray(v)) v = v.join(", ");
+    else if (typeof v === "number" && v >= 1e8) v = (v / 1e8).toFixed(0) + "억";
+    return `<div><dt>${label}</dt><dd>${v}</dd></div>`;
+  }).join("");
+  $("#view").innerHTML = `<dl class="cfg">${items}</dl>`;
+}
+
+/* ------------------------------------------------------------------ 상세 */
+async function selectSignal(r) { SELECTED = r; renderTab(); await renderDetail(r); }
+async function selectWatch(r) {
+  SELECTED = { ...r, "매수가": r["감시_돌파가(전일고가)"], "손절가": r["기준봉저가(손절)"], _watch: true };
+  renderTab(); await renderDetail(SELECTED);
+}
+
+async function renderDetail(r) {
+  const d = $("#detail");
+  d.innerHTML = `<div class="detail"><div class="empty">차트 불러오는 중…</div></div>`;
+  let data;
+  try {
+    data = await (await fetch(`/api/chart/${r["종목코드"]}?count=60`)).json();
+  } catch (e) {
+    d.innerHTML = `<div class="detail"><div class="empty">차트를 불러오지 못했습니다.</div></div>`;
+    return;
+  }
+  const risk = r["매수가"] - r["손절가"];
+  const stats = r._watch ? [
+    ["기준봉일", r["기준봉일"]], ["경과", r["경과일"] + "영업일"],
+    ["돌파 감시가", fmt(r["매수가"])], ["손절가(기준봉 저가)", fmt(r["손절가"])],
+    ["조정 거래량비", r["조정거래량비"]],
+  ] : [
+    ["기준봉일", r["기준봉일"]], ["윗꼬리 비율", r["기준봉_윗꼬리%"] + "%"],
+    ["기준봉 거래량", "×" + r["기준봉_거래량배수"]], ["조정 기간", r["조정일수"] + "영업일"],
+    ["거래량 증가", "+" + fmt(r["거래량증가율%"]) + "%"],
+    ["매수가(전일 고가)", fmt(r["매수가"])], ["손절가(기준봉 저가)", fmt(r["손절가"])],
+    ["손절폭", r["손절폭%"] + "%"],
+    ["목표가 1R/2R/3R", (r["목표가"] || []).map(v => fmt(v)).join(" · ")],
+  ];
+  d.innerHTML = `<div class="detail">
+    <div class="detail-head">
+      <h2>${r["종목명"]} <span class="muted">${r["종목코드"]}</span></h2>
+      <a class="toss-btn" href="${tossUrl(r["종목코드"])}" target="_blank" rel="noopener noreferrer">
+        토스증권에서 열기 ↗</a>
+      <span class="badge">${r._watch ? "돌파 대기" : "매수 시그널"}</span>
+    </div>
+    ${scoreBlock(r)}
+    <div class="detail-grid">${stats.map(([k, v]) => `<div>${k}<strong>${v}</strong></div>`).join("")}</div>
+    ${r._watch ? "" : posCalc(r)}
+    <div class="chart-box" id="chart-box"></div>
+    <div class="legend">
+      <span><i style="background:var(--up)"></i>양봉(상승)</span>
+      <span><i style="background:var(--down)"></i>음봉(하락)</span>
+      <span><i style="background:var(--warning)"></i>기준봉</span>
+      <span><i style="background:var(--text-muted);height:2px;border-radius:0"></i>매수가 / 손절가</span>
+    </div>
+  </div>`;
+  if (!r._watch) bindPosCalc(r);
+  drawChart(data.candles, r);
+}
+
+const ENTRY_CUTOFF = 75;
+
+function scoreBlock(r) {
+  const items = r["점수상세"] || [];
+  if (!items.length) return "";
+  const pass = r["점수"] >= ENTRY_CUTOFF;
+  const cls = "g-" + (r["등급"] || "").replace("+", "p");
+  const rows = items.map(i => `<tr>
+      <td>${i["항목"]}</td>
+      <td><div class="bar"><i style="width:${i["만점"] ? i["점수"] / i["만점"] * 100 : 0}%"></i></div></td>
+      <td>${i["점수"]} / ${i["만점"]}</td>
+      <td>${i["값"]} — ${i["설명"]}</td></tr>`).join("");
+  return `<div class="detail-grid" style="grid-template-columns:1fr">
+      <div>진입 점수
+        <strong class="score"><b style="font-size:30px">${r["점수"]}</b>
+          <span class="muted" style="font-size:13px">/ 100</span>
+          <span class="g ${cls}">${r["등급"]}</span>
+          <span class="muted" style="font-size:13px">${r["판단"]}</span></strong>
+        <div class="muted" style="margin-top:4px;font-size:12px">
+          실전 컷오프 ${ENTRY_CUTOFF}점 — ${pass
+            ? "충족 (실측 A 60.0% / A+ 69.1% 승률)"
+            : "미달 (65~74점 구간 실측 승률 50.1%, 평균 −0.048R)"}</div>
+      </div></div>
+    <table class="breakdown"><tbody>${rows}</tbody></table>`;
+}
+
+
+/* ------------------------------------------------------------------ 가이드 */
+let GUIDE = null;
+
+// 서술형 컬럼은 좌측 정렬한다 (숫자 컬럼만 우측 정렬)
+const WIDE = new Set(["구간별 점수", "조건"]);
+const tbl = (cols, rows, rowFn) => `<div class="table-scroll"><table>
+  <thead><tr>${cols.map(c => `<th${WIDE.has(c) ? ' class="l"' : ""}>${c}</th>`).join("")}</tr></thead>
+  <tbody>${rows.map(rowFn).join("")}</tbody></table></div>`;
+
+const pick = (v) => v == null ? "–" : (v > 0 ? "+" : "") + Number(v).toFixed(3) + "R";
+const rc = (v) => v == null ? "" : (v > 0 ? "up" : "down");
+
+async function renderGuide() {
+  if (!GUIDE) GUIDE = await (await fetch("/api/guide")).json();
+  const g = GUIDE;
+
+  const steps = `<div class="steps">${g["단계"].map(s => `<div class="step">
+      <div class="n">${s["단계"]}</div><h4>${s["이름"]}</h4>
+      <p>${s["설명"]}</p>
+      <ul>${s["조건"].map(c => `<li>${c}</li>`).join("")}</ul></div>`).join("")}</div>`;
+
+  const factors = tbl(["요인", "배점", "구간별 점수"], g["요인"], f => `<tr>
+      <td>${f["항목"]}</td><td>${f["배점"]}점</td>
+      <td class="l">${f["구간"]
+        .map(b => `${b["설명"]} <b>${b["점수"]}점</b>`).join(" · ")}</td></tr>`);
+
+  const grades = tbl(["등급", "점수 구간", "과거 거래수", "승률", "평균 손익"],
+    g["등급성과"], r => `<tr>
+      <td><span class="g g-${r["등급"].replace("+", "p")}">${r["등급"]}</span></td>
+      <td>${r["구간"]}</td><td>${fmt(r["거래수"])}건</td>
+      <td>${Number(r["승률"]).toFixed(1)}%</td><td class="${rc(r["평균R"])}">${pick(r["평균R"])}</td></tr>`);
+
+  const cut = g["컷오프"];
+  const profiles = tbl(["프로파일", "조건", "거래수", "승률", "평균 손익", "수익팩터", "최대낙폭"],
+    g["프로파일"], r => `<tr>
+      <td>${r["채택"] ? "✅ " : ""}${r["이름"]}</td>
+      <td class="l">${r["조건"]}</td>
+      <td>${fmt(r["거래수"])}</td><td>${Number(r["승률"]).toFixed(1)}%</td>
+      <td class="${rc(r["평균R"])}">${pick(r["평균R"])}</td>
+      <td>${r["수익팩터"]}</td><td>${r["MDD"]}R</td></tr>`);
+
+  const stops = tbl(["손절 기준", "승률", "평균 손익", "수익팩터", "최대낙폭", "평균 보유"],
+    g["손절방식"], r => `<tr>
+      <td>${r["채택"] ? "✅ " : ""}${r["이름"]}</td><td>${Number(r["승률"]).toFixed(1)}%</td>
+      <td class="${rc(r["평균R"])}">${pick(r["평균R"])}</td>
+      <td>${r["수익팩터"]}</td><td>${r["MDD"]}R</td><td>${r["평균보유일"]}일</td></tr>`);
+
+  const regimes = tbl(["기준", "통과 거래", "승률", "평균 손익", "수익팩터", "최대낙폭", "제외 구간"],
+    g["국면"], r => `<tr>
+      <td>${r["채택"] ? "✅ " : ""}${r["이름"]}</td><td>${fmt(r["통과"])}건</td>
+      <td>${Number(r["승률"]).toFixed(1)}%</td><td class="${rc(r["평균R"])}">${pick(r["평균R"])}</td>
+      <td>${r["수익팩터"]}</td><td>${r["MDD"]}R</td>
+      <td class="${rc(r["제외구간평균R"])}">${pick(r["제외구간평균R"])}</td></tr>`);
+
+  const exits = Object.entries(g["청산규칙"])
+    .map(([k, v]) => `<li><b>${k}</b> — ${v}</li>`).join("");
+
+  $("#view").innerHTML = `<div class="guide">
+    <h3>1. 이 전략은 무엇인가</h3>
+    <p>바닥권에서 <b>세력이 물량을 매집한 흔적(기준봉)</b>을 찾고, 매물이 소화되길 기다렸다가
+       <b>전일 고가를 거래량과 함께 돌파하는 순간</b>에 진입합니다. 3단계로 판정합니다.</p>
+    ${steps}
+
+    <h3>2. 점수는 어떻게 매기나 — 100점 만점</h3>
+    <p>배점은 임의로 정한 게 아니라 <b>${g["표본"]["기간"]} ${fmt(g["표본"]["종목수"])}종목
+       ${fmt(g["표본"]["봉수"])}봉 백테스트에서 구간별로 실제 측정한 평균 손익</b>에 맞춰 역산했습니다.
+       R은 손절폭 1회분을 1로 본 단위입니다 — <code>+1R</code>은 손절할 뻔한 금액만큼 벌었다는 뜻입니다.</p>
+    ${factors}
+    <div class="callout warn"><b>주의: 클수록 좋은 게 아닙니다</b>
+      조정 거래량비는 0.10~0.20이 가장 좋고(+0.315R) 0.10 미만은 오히려 떨어집니다(+0.111R).
+      거래량도 50~100배가 최고고 100배를 넘으면 꺾입니다. 실측 곡선을 그대로 반영했습니다.</div>
+
+    <h3>3. 몇 점부터 사도 되나 — 컷오프 ${g["컷오프점수"]}점</h3>
+    <p>과거 거래를 이 점수로 사후 채점한 결과입니다.</p>
+    ${grades}
+    <div class="callout"><b>${cut["컷오프"]}점 이상만 매매했다면</b>
+      ${fmt(cut["거래수"])}건 · 승률 ${cut["승률"]}% · 평균 ${pick(cut["평균R"])} · 누적 ${cut["총R"]}R.
+      <b style="display:inline">B등급(65~74점)은 승률 50.1%에 평균 −0.048R로 적자</b>였습니다 —
+      점수가 아깝다고 진입하지 마세요.</div>
+
+    <h3>4. 얼마를 넣어야 하나 — 포지션 계산</h3>
+    <p>${g["포지션"]["설명"]}</p>
+    <div class="callout"><b>${g["포지션"]["공식"]}</b>
+      ${g["포지션"]["권장"].map(v => `• ${v}`).join("<br>")}</div>
+    <p class="muted">시그널 행을 클릭하면 상세 패널에서 <b>계좌 잔고를 넣어 투입금액을 바로 계산</b>할 수 있습니다.</p>
+
+    <h3>5. 언제 파나 — 청산 규칙</h3>
+    <p>아래는 백테스트에 쓴 규칙 그대로입니다. 살 때 미리 정해두고 기계적으로 지키는 게 핵심입니다.</p>
+    <ul>${exits}</ul>
+
+    <h3>6. 왜 이 설정인가 — 검증 기록</h3>
+    <p><b>전략 프로파일</b> — 원본 스펙 그대로는 3년 기준 손실이었습니다.</p>
+    ${profiles}
+    <p style="margin-top:14px"><b>손절 기준</b> — 타이트하게 잡으면 휩쏘에 털립니다(평균 보유 2.2일).</p>
+    ${stops}
+    <p style="margin-top:14px"><b>시장 국면 필터</b> — 가장 효과가 컸습니다. 이동평균 값을 5·10·20·60 어떻게 바꿔도
+       같은 방향이라 특정 값에 끼워맞춘 결과가 아닙니다.</p>
+    ${regimes}
+
+    <h3>7. 반드시 알아야 할 한계</h3>
+    ${g["주의"].map(c => `<div class="callout bad">${c}</div>`).join("")}
+    <p class="muted" style="margin-top:16px">측정일 ${g["측정일"]} ·
+      표본 ${g["표본"]["기간"]} ${fmt(g["표본"]["종목수"])}종목 ${fmt(g["표본"]["봉수"])}봉</p>
+  </div>`;
+}
+
+/* --------------------------------------------------- 포지션 사이징 계산기 */
+function posCalc(r) {
+  const risk = r["매수가"] - r["손절가"];
+  if (!(risk > 0)) return "";
+  let bal = 10000000, pct = 1;
+  try {
+    bal = Number(localStorage.getItem("balance")) || bal;
+    pct = Number(localStorage.getItem("riskPct")) || pct;
+  } catch (e) {}
+  return `<div class="pos">
+    <div class="pos-row">
+      <div><label>계좌 잔고 (원)</label><input id="pc-bal" type="number" step="1000000" value="${bal}"></div>
+      <div><label>1회 허용 손실</label>
+        <select id="pc-pct">${[0.5, 1, 1.5, 2].map(v =>
+          `<option value="${v}" ${v === pct ? "selected" : ""}>${v}%</option>`).join("")}</select></div>
+      <div class="muted" style="font-size:12px;padding-bottom:8px">
+        투입금액 = (잔고 × 허용 손실) ÷ 손절폭 ${r["손절폭%"]}%</div>
+    </div>
+    <div class="pos-out" id="pc-out"></div>
+    <div class="order-bar">
+      <button id="od-dry">모의 주문 확인</button>
+      <button class="primary danger" id="od-live">토스 매수 주문</button>
+      <span class="muted" id="od-mode" style="font-size:12px"></span>
+    </div>
+    <div id="od-result"></div>
+  </div>`;
+}
+
+function bindPosCalc(r) {
+  const bal = $("#pc-bal"), pct = $("#pc-pct"), out = $("#pc-out");
+  if (!bal || !out) return;
+  const calc = () => {
+    const b = Number(bal.value) || 0, p = Number(pct.value) || 1;
+    const loss = b * p / 100;
+    const riskPct = (r["매수가"] - r["손절가"]) / r["매수가"];
+    const amount = riskPct > 0 ? loss / riskPct : 0;
+    const shares = Math.floor(amount / r["매수가"]);
+    const invested = shares * r["매수가"];
+    const t = (r["목표가"] || [])[0];
+    out.innerHTML = `
+      <div>매수 수량<strong>${fmt(shares)}주</strong></div>
+      <div>투입 금액<strong>${fmt(invested)}원</strong></div>
+      <div>손절 시 손실<strong class="down">−${fmt(shares * (r["매수가"] - r["손절가"]))}원</strong></div>
+      <div>1R 도달 시<strong class="up">+${fmt(t ? shares * (t - r["매수가"]) : 0)}원</strong></div>
+      <div>계좌 대비 비중<strong>${b ? (invested / b * 100).toFixed(1) : 0}%</strong></div>`;
+    try {
+      localStorage.setItem("balance", String(b));
+      localStorage.setItem("riskPct", String(p));
+    } catch (e) {}
+    return shares;
+  };
+  let shares = 0;
+  const recalc = () => { shares = calc(); bindOrder(r, () => shares); };
+  bal.oninput = recalc;
+  pct.onchange = recalc;
+  recalc();
+}
+
+/* ------------------------------------------------------------------ 주문 */
+let TRADING = null;
+
+async function tradingStatus() {
+  if (!TRADING) {
+    try { TRADING = await (await fetch("/api/trading/status")).json(); }
+    catch (e) { TRADING = { configured: false, enabled: false }; }
+  }
+  return TRADING;
+}
+
+function orderBody(r, shares, dryRun) {
+  return {
+    symbol: r["종목코드"], name: r["종목명"], quantity: shares,
+    entry: r["매수가"], stop: r["손절가"], target: (r["목표가"] || [])[0],
+    dry_run: dryRun, ...(dryRun ? {} : { confirm: "실행" }),
+  };
+}
+
+async function bindOrder(r, getShares) {
+  const dryBtn = $("#od-dry"), liveBtn = $("#od-live"),
+        mode = $("#od-mode"), box = $("#od-result");
+  if (!dryBtn || !liveBtn) return;
+
+  const t = await tradingStatus();
+  const target = (r["목표가"] || [])[0];
+  const acct = t.account ? `${t.account.accountNo}` : "계좌 확인 필요";
+
+  if (!t.configured) {
+    liveBtn.disabled = dryBtn.disabled = true;
+    mode.textContent = "주문 기능이 구성되지 않았습니다 (합성/CSV 데이터 모드).";
+  } else if (!t.enabled) {
+    liveBtn.disabled = true;
+    liveBtn.title = "실거래가 꺼져 있습니다 (.env 의 TOSS_TRADING_ENABLED=true 필요)";
+    mode.innerHTML = `모의 전용 · ${acct} · 1회 한도 ${fmt(t.max_order_amount)}원
+      <br>실주문은 <code>TOSS_TRADING_ENABLED=true</code> 설정 후 재시작해야 열립니다.`;
+  } else {
+    liveBtn.disabled = false;
+    mode.innerHTML = `<b class="down">실거래 ON</b> · ${acct} ·
+      1회 한도 ${fmt(t.max_order_amount)}원`;
+  }
+
+  const show = (html, kind = "") => { box.innerHTML = `<div class="od ${kind}">${html}</div>`; };
+
+  const send = async (dryRun) => {
+    const shares = getShares();
+    if (!shares) return show("수량이 0입니다. 계좌 잔고나 허용 손실을 늘리세요.", "bad");
+    if (!target) return show("목표가가 없어 익절 조건을 만들 수 없습니다.", "bad");
+    dryBtn.disabled = liveBtn.disabled = true;
+    show("전송 중…");
+    try {
+      const res = await fetch("/api/trading/order", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(orderBody(r, shares, dryRun)),
+      });
+      const data = await res.json();
+      if (!res.ok) return show(`❌ ${data.detail || "주문 실패"}`, "bad");
+      const p = data.plan;
+      const steps = (data.steps || []).map(s =>
+        `<li><b>${s["단계"]}</b> — ${s["상태"]} · ${s["내용"]}</li>`).join("");
+      show(`<b>${data.dry_run ? "🧪 모의 실행 결과" : "✅ 주문 접수"}</b>
+        <div class="muted" style="margin:4px 0 8px">${data.message}</div>
+        <ul>${steps}</ul>
+        <div class="muted" style="font-size:12px">
+          호가 정렬 후 — 매수 ${fmt(p.entry)} · 손절 ${fmt(p.stop)} · 익절 ${fmt(p.target)} ·
+          ${fmt(p.quantity)}주 · 투입 ${fmt(p.amount)}원 ·
+          최대 손실 −${fmt(p.risk_amount)}원 / 익절 시 +${fmt(p.reward_amount)}원</div>`,
+        data.dry_run ? "" : "good");
+    } catch (e) {
+      show(`❌ 통신 오류: ${e}`, "bad");
+    } finally {
+      dryBtn.disabled = false;
+      liveBtn.disabled = !(TRADING && TRADING.enabled);
+    }
+  };
+
+  dryBtn.onclick = () => send(true);
+  liveBtn.onclick = () => {
+    const shares = getShares();
+    const amount = shares * r["매수가"];
+    const ok = confirm(
+      `⚠ 실제 주문이 나갑니다. 되돌릴 수 없습니다.\n\n` +
+      `${r["종목명"]} (${r["종목코드"]})\n` +
+      `매수  지정가 ${fmt(r["매수가"])}원 × ${fmt(shares)}주 = ${fmt(amount)}원\n` +
+      `손절  ${fmt(r["손절가"])}원  (최대 손실 −${fmt(shares * (r["매수가"] - r["손절가"]))}원)\n` +
+      `익절  ${fmt(target)}원  (+${fmt(shares * (target - r["매수가"]))}원)\n\n` +
+      `체결되면 손절·익절이 OCO 조건주문으로 자동 등록됩니다.\n진행할까요?`);
+    if (ok) send(false);
+  };
+}
+
+/* ---------------------------------------------------- 캔들 + 거래량 차트 */
+function drawChart(candles, r) {
+  const box = $("#chart-box");
+  const W = 1000, H = 380, PL = 8, PR = 62, PT = 10, PB = 22;
+  const PRICE_H = 250, GAP = 14, VOL_H = H - PT - PB - PRICE_H - GAP;
+  const n = candles.length;
+  const iw = (W - PL - PR) / n;             // 슬롯 폭
+  const bw = Math.max(2, iw * 0.6);         // 몸통 폭
+
+  const lines = [r["매수가"], r["손절가"]].filter(Number.isFinite);
+  const lo = Math.min(...candles.map(c => c.low), ...lines);
+  const hi = Math.max(...candles.map(c => c.high), ...lines);
+  const pad = (hi - lo) * 0.08 || 1;
+  const y = v => PT + PRICE_H - (v - lo + pad) / (hi - lo + pad * 2) * PRICE_H;
+  const vmax = Math.max(...candles.map(c => c.volume)) || 1;
+  const vy = v => PT + PRICE_H + GAP + VOL_H - (v / vmax) * VOL_H;
+  const cx = i => PL + iw * (i + 0.5);
+  const baseDate = r["기준봉일"];
+
+  const ticks = 4, gridEls = [];
+  for (let t = 0; t <= ticks; t++) {
+    const val = lo - pad + (hi - lo + pad * 2) * t / ticks, gy = y(val);
+    gridEls.push(`<line x1="${PL}" y1="${gy.toFixed(1)}" x2="${W - PR}" y2="${gy.toFixed(1)}" stroke="var(--grid)" stroke-width="1"/>
+      <text x="${W - PR + 6}" y="${(gy + 4).toFixed(1)}" fill="var(--text-muted)" font-size="11">${fmt(val)}</text>`);
+  }
+
+  const marks = candles.map((c, i) => {
+    const up = c.close >= c.open;
+    const col = up ? "var(--up)" : "var(--down)";
+    const top = y(Math.max(c.open, c.close)), bot = y(Math.min(c.open, c.close));
+    const h = Math.max(1, bot - top);
+    const isBase = c.date === baseDate;
+    return `${isBase ? `<rect x="${(cx(i) - iw / 2).toFixed(1)}" y="${PT}" width="${iw.toFixed(1)}" height="${PRICE_H + GAP + VOL_H}" fill="var(--warning)" opacity=".16"/>` : ""}
+      <line x1="${cx(i).toFixed(1)}" y1="${y(c.high).toFixed(1)}" x2="${cx(i).toFixed(1)}" y2="${y(c.low).toFixed(1)}" stroke="${col}" stroke-width="1.5"/>
+      <rect x="${(cx(i) - bw / 2).toFixed(1)}" y="${top.toFixed(1)}" width="${bw.toFixed(1)}" height="${h.toFixed(1)}" fill="${col}" rx="1"/>
+      <rect x="${(cx(i) - bw / 2).toFixed(1)}" y="${vy(c.volume).toFixed(1)}" width="${bw.toFixed(1)}" height="${(PT + PRICE_H + GAP + VOL_H - vy(c.volume)).toFixed(1)}" fill="${col}" opacity=".45" rx="1"/>`;
+  }).join("");
+
+  const refLine = (v, label, dash) => Number.isFinite(v) ? `
+    <line x1="${PL}" y1="${y(v).toFixed(1)}" x2="${W - PR}" y2="${y(v).toFixed(1)}"
+          stroke="var(--text-secondary)" stroke-width="1.5" stroke-dasharray="${dash}"/>
+    <text x="${PL + 4}" y="${(y(v) - 5).toFixed(1)}" fill="var(--text-secondary)" font-size="11">${label} ${fmt(v)}</text>` : "";
+
+  const xLabels = candles.map((c, i) =>
+    (i % Math.ceil(n / 8) === 0 || i === n - 1)
+      ? `<text x="${cx(i).toFixed(1)}" y="${H - 6}" fill="var(--text-muted)" font-size="11" text-anchor="middle">${c.date.slice(5)}</text>` : ""
+  ).join("");
+
+  box.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" role="img"
+         aria-label="${r["종목명"]} 최근 ${n}일 일봉 캔들과 거래량. 기준봉 ${baseDate} 강조.">
+      ${gridEls.join("")}
+      <text x="${PL + 2}" y="${PT + PRICE_H + GAP + 6}" fill="var(--text-muted)" font-size="11">거래량</text>
+      ${marks}
+      ${refLine(r["매수가"], "매수", "5 4")}
+      ${refLine(r["손절가"], "손절", "2 3")}
+      ${xLabels}
+      <rect id="hit" x="${PL}" y="0" width="${W - PL - PR}" height="${H}" fill="transparent"/>
+      <line id="cross" x1="0" y1="${PT}" x2="0" y2="${PT + PRICE_H + GAP + VOL_H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
+    </svg>
+    <div class="tooltip" id="tip"></div>`;
+
+  const svg = box.querySelector("svg"), tip = $("#tip"), cross = box.querySelector("#cross");
+  svg.addEventListener("mousemove", ev => {
+    const rect = svg.getBoundingClientRect();
+    const sx = (ev.clientX - rect.left) / rect.width * W;
+    const i = Math.max(0, Math.min(n - 1, Math.floor((sx - PL) / iw)));
+    const c = candles[i];
+    cross.setAttribute("x1", cx(i)); cross.setAttribute("x2", cx(i)); cross.setAttribute("opacity", ".7");
+    tip.style.opacity = 1;
+    tip.innerHTML = `<b>${c.date}${c.date === baseDate ? " · 기준봉" : ""}</b>
+      시 ${fmt(c.open)} · 고 ${fmt(c.high)}<br>저 ${fmt(c.low)} · 종 ${fmt(c.close)}<br>
+      거래량 ${fmt(c.volume)}`;
+    const px = cx(i) / W * rect.width;
+    tip.style.left = Math.min(rect.width - tip.offsetWidth - 8, Math.max(0, px + 12)) + "px";
+    tip.style.top = (ev.clientY - rect.top - 10) + "px";
+  });
+  svg.addEventListener("mouseleave", () => { tip.style.opacity = 0; cross.setAttribute("opacity", "0"); });
+}
+
+/* ------------------------------------------------------------------ 액션 */
+$("#scan-btn").onclick = async () => {
+  if (STATE && STATE.configured === false) { Session.open(); return; }
+  $("#scan-btn").disabled = true;
+  await fetch("/api/scan", { method: "POST" });
+  setTimeout(refresh, 600);
+};
+
+// 설정 창에서 키를 저장·해제하면 화면을 즉시 새로고침한다.
+document.addEventListener("sessionchange", () => { SELECTED = null; $("#detail").innerHTML = ""; refresh(); });
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

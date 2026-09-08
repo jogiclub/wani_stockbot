@@ -1,0 +1,84 @@
+services:
+  # 1회성 스캔: docker compose run --rm screener scan --top 100
+  screener:
+    build:
+      context: .
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    image: stock-find:latest
+    container_name: stock-find-screener
+    env_file: .env
+    environment:
+      TZ: Asia/Seoul
+    volumes:
+      - ./cache:/app/cache
+      - ./out:/app/out
+    command: ["scan", "--top", "100", "--csv-out", "/app/out/signals.csv"]
+    profiles: ["manual"]
+
+  # 웹 대시보드: http://localhost:8083
+  web:
+    build:
+      context: .
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    image: stock-find:latest
+    container_name: stock-find-web
+    env_file: .env
+    environment:
+      TZ: Asia/Seoul
+    ports:
+      - "8083:8083"
+    volumes:
+      - ./cache:/app/cache
+      - ./out:/app/out
+    command: ["web", "--port", "8083", "--top", "200", "--interval", "300"]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8083/healthz', timeout=5).status==200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # 장중 상시 감시 데몬: docker compose up -d poller
+  poller:
+    build:
+      context: .
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    image: stock-find:latest
+    container_name: stock-find-poller
+    env_file: .env
+    environment:
+      TZ: Asia/Seoul
+    volumes:
+      - ./cache:/app/cache
+      - ./out:/app/out
+    command: ["poll", "--top", "200", "--interval", "60", "--out", "/app/out/signals.jsonl"]
+    restart: unless-stopped
+    stop_grace_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  # API 없이 동작 확인: docker compose run --rm demo
+  demo:
+    build:
+      context: .
+      args:
+        APP_UID: ${APP_UID:-1000}
+        APP_GID: ${APP_GID:-1000}
+    image: stock-find:latest
+    command: ["demo"]
+    profiles: ["manual"]

@@ -1,0 +1,10 @@
+.venv/
+.venv-linux/
+__pycache__/
+*.pyc
+.env
+.idea/
+cache/
+*.log
+
+out/

@@ -1,0 +1,153 @@
+/* 공통 테마 토큰 + GNB. 세력추정매매(dashboard.html)와 볼린저(bollinger.html)가 함께 쓴다.
+   외부 CDN·프레임워크는 쓰지 않는다 (폐쇄망·컨테이너 고려).
+   색상: 상승/양봉 --up(적색), 하락/음봉 --down(청색) — 한국 시장 관례. */
+:root {
+  color-scheme: light;
+  --surface-0: #f4f3f0;
+  --surface-1: #fcfcfb;
+  --surface-2: #eceae5;
+  --border:    #dbd9d2;
+  --text-primary:   #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted:     #86847d;
+  --up:   #e34948;
+  --down: #2a78d6;
+  --good: #0ca30c;
+  --warning: #fab219;
+  --critical: #d03b3b;
+  --accent: #2a78d6;
+  --grid: rgba(11,11,11,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-0: #121211;
+    --surface-1: #1a1a19;
+    --surface-2: #232322;
+    --border:    #35352f;
+    --text-primary:   #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted:     #8b8a81;
+    --up:   #e66767;
+    --down: #3987e5;
+    --accent: #3987e5;
+    --grid: rgba(255,255,255,.09);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-0: #121211;
+  --surface-1: #1a1a19;
+  --surface-2: #232322;
+  --border:    #35352f;
+  --text-primary:   #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted:     #8b8a81;
+  --up:   #e66767;
+  --down: #3987e5;
+  --accent: #3987e5;
+  --grid: rgba(255,255,255,.09);
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--surface-0); color: var(--text-primary);
+  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
+        "Malgun Gothic", "Noto Sans KR", sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ------------------------------------------------------------------ GNB */
+.gnb {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--surface-1); border-bottom: 1px solid var(--border);
+}
+.gnb-inner {
+  max-width: 1280px; margin: 0 auto; padding: 0 20px;
+  display: flex; align-items: center; gap: 8px; min-height: 54px; flex-wrap: wrap;
+}
+.gnb-brand {
+  display: inline-flex; align-items: center; gap: 7px; margin-right: 10px;
+  font-size: 17px; font-weight: 750; letter-spacing: -.02em;
+  color: var(--text-primary); text-decoration: none; white-space: nowrap;
+}
+.gnb-brand .mark {
+  width: 22px; height: 22px; border-radius: 7px; background: var(--accent);
+  color: #fff; font-size: 12px; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.gnb-menu { display: flex; gap: 2px; flex-wrap: wrap; }
+.gnb-menu a {
+  padding: 7px 12px; border-radius: 8px; text-decoration: none;
+  color: var(--text-secondary); font-weight: 550; white-space: nowrap;
+}
+.gnb-menu a:hover { background: var(--surface-2); color: var(--text-primary); }
+.gnb-menu a[aria-current="page"] {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+  color: var(--accent); font-weight: 700;
+}
+.gnb-spacer { flex: 1 1 auto; }
+.gnb-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border);
+         background: var(--surface-1); color: var(--text-primary); padding: 7px 14px; }
+button:hover { background: var(--surface-2); }
+button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+button.primary:disabled { opacity: .5; cursor: not-allowed; }
+button.danger { background: var(--critical); border-color: transparent; color: #fff; font-weight: 600; }
+button.danger:disabled { opacity: .5; cursor: not-allowed; }
+
+.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
+         border-radius: 999px; font-size: 12px; font-weight: 600;
+         background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); }
+.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
+.badge.live .dot { background: var(--good); animation: pulse 1.6s ease-in-out infinite; }
+.badge.busy .dot { background: var(--warning); animation: pulse .9s ease-in-out infinite; }
+.badge.err  .dot { background: var(--critical); }
+.badge.warn { background: color-mix(in srgb, var(--warning) 22%, transparent);
+              border-color: var(--warning); color: var(--text-primary); }
+@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
+
+@media (max-width: 640px) {
+  .gnb-inner { padding: 8px 14px; }
+  .gnb-brand { font-size: 16px; }
+}
+
+/* ------------------------------------------ 설정(개인 API 키) 모달 · 공통 폼 */
+  /* 설정(개인 API 키) 모달 */
+  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20;
+                display: flex; align-items: flex-start; justify-content: center;
+                padding: 40px 16px; overflow-y: auto; }
+  .modal-back[hidden] { display: none; }
+  .modal { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+           width: min(560px, 100%); padding: 20px 22px 18px;
+           box-shadow: 0 18px 50px rgba(0,0,0,.3); }
+  .modal h2 { margin: 0 0 4px; font-size: 17px; }
+  .modal .sub { margin: 0 0 14px; font-size: 12.5px; color: var(--text-muted); }
+  .modal fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
+                    margin: 0 0 12px; }
+  .modal legend { font-size: 12px; color: var(--text-muted); padding: 0 6px; }
+  .field { margin-bottom: 10px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
+  .field input[type=text], .field input[type=password], .field input[type=number] {
+    font: inherit; width: 100%; padding: 8px 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--surface-0); color: var(--text-primary); }
+  .field .hint { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
+  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .check input { width: 16px; height: 16px; }
+  .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
+  .modal-msg { font-size: 12.5px; margin-top: 10px; }
+  .modal-msg.bad { color: var(--critical); }
+  .modal-msg.ok { color: var(--good); }
+  .setup-bar { background: color-mix(in srgb, var(--accent) 12%, transparent);
+               border: 1px solid var(--accent); padding: 12px 14px; border-radius: 10px;
+               margin-bottom: 14px; font-size: 13px; display: flex; flex-wrap: wrap;
+               gap: 10px; align-items: center; }
+  .setup-bar[hidden] { display: none; }
+
+.err-bar { background: color-mix(in srgb, var(--critical) 14%, transparent);
+           border: 1px solid var(--critical); color: var(--text-primary);
+           padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 13px; }
+.err-bar[hidden] { display: none; }

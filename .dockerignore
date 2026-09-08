@@ -1,0 +1,12 @@
+.venv/
+.venv-linux/
+.git/
+.idea/
+__pycache__/
+*.pyc
+.env
+cache/
+out/
+tests/
+*.log
+*.md
