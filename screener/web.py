@@ -756,6 +756,12 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
         removed = symbol in current
         if removed:
             bot.update_config(replace(bot.cfg, symbols=tuple(x for x in current if x != symbol)))
+            # 감시 현황(state.decisions)에서도 **즉시** 뺀다. 안 그러면 다음 판정 주기까지
+            # 삭제한 종목이 화면에 계속 남아 "지금 점검" 을 눌러야 사라진다(겪은 문제).
+            bot.state.decisions = [d for d in bot.state.decisions
+                                   if d.get("종목코드") != symbol]
+            bot.state.positions = [p for p in bot.state.positions
+                                   if p.get("symbol") != symbol]
         persisted = _bb_save(request, bot)
         return JSONResponse({"ok": True, "removed": removed, "symbol": symbol,
                              "symbols": list(bot.cfg.symbols),

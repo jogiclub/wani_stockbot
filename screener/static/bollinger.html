@@ -358,24 +358,8 @@ function delCol() {
 function removeFromEvent(ev) {
   const btn = ev && ev.target && ev.target.closest && ev.target.closest("button.sf-del");
   if (!btn) return false;
-  removeSymbol(btn.dataset.del);
+  removeSymbol(btn.dataset.del, { confirm: true });
   return true;
-}
-
-async function removeSymbol(symbol) {
-  const name = ((STATE.decisions || []).find(d => d["종목코드"] === symbol) || {})["종목명"] || symbol;
-  if (!confirm(`${name}(${symbol})을(를) 감시 목록에서 삭제할까요?`)) return;
-  try {
-    const r = await fetch("/api/bollinger/symbols", {
-      method: "DELETE", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ symbol }) });
-    const body = await r.json().catch(() => ({}));
-    if (!r.ok) { alert(body.detail || `삭제하지 못했습니다 (HTTP ${r.status})`); return; }
-    if (SELECTED === symbol) { SELECTED = null; $("#detail").innerHTML = ""; }
-    refresh();
-  } catch (e) {
-    alert("요청 실패: " + e.message);
-  }
 }
 
 function renderPositions() {
@@ -805,8 +789,8 @@ async function addSymbols() {
     return;
   }
   $("#a-add").disabled = false;
-  await refresh();
   renderAddList();
+  burstRefresh();          // 새 종목의 즉시 판정(run_once)이 끝나는 대로 화면이 따라잡는다
   $("#a-symbols").value = "";
   const parts = [];
   if (added.length) parts.push(`<b>${added.join(", ")}</b> 추가`);
@@ -815,21 +799,43 @@ async function addSymbols() {
   addMsg(failed.length ? "bad" : "ok", parts.join(" · "));
 }
 
-async function removeSymbol(symbol) {
-  const rest = ((STATE.config || {}).symbols || []).filter(s => s !== symbol);
-  addMsg("", "제거하는 중…");
+/* 감시 목록에서 종목 제거 — 감시 그리드의 ✕ 버튼과 종목추가 모달의 목록이 함께 쓴다.
+   `DELETE /api/bollinger/symbols` 를 쓰므로 **보유 중이면 서버가 409 로 거부**한다.
+   삭제 뒤 서버가 decisions 를 즉시 비워 주지만, run 반영까지 잠깐 집중 폴링으로 화면을 따라잡는다.
+   그리드에서 부를 때(fromGrid)는 확인창을 띄우고 실패는 alert, 모달에서는 addMsg 로 알린다. */
+async function removeSymbol(symbol, opts = {}) {
+  const fromGrid = !!opts.confirm;
+  if (fromGrid) {
+    const name = ((STATE.decisions || []).find(d => d["종목코드"] === symbol) || {})["종목명"] || symbol;
+    if (!confirm(`${name}(${symbol})을(를) 감시 목록에서 삭제할까요?`)) return;
+  } else {
+    addMsg("", "제거하는 중…");
+  }
   try {
-    const r = await fetch("/api/bollinger/config", {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbols: rest }),
+    const r = await fetch("/api/bollinger/symbols", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol }),
     });
     const out = await r.json().catch(() => ({}));
-    if (!r.ok) { addMsg("bad", out.detail || "제거 실패"); return; }
-    await refresh();
+    if (!r.ok) {
+      const m = out.detail || `삭제하지 못했습니다 (HTTP ${r.status})`;
+      fromGrid ? alert(m) : addMsg("bad", m);
+      return;
+    }
+    if (SELECTED === symbol) { SELECTED = null; $("#detail").innerHTML = ""; }
     renderAddList();
-    addMsg("ok", `<b>${symbol}</b> 를 감시 목록에서 뺐습니다.`);
+    if (!fromGrid) addMsg("ok", `<b>${symbol}</b> 를 감시 목록에서 뺐습니다.`);
+    burstRefresh();
   } catch (e) {
-    addMsg("bad", "서버에 연결하지 못했습니다: " + e);
+    const m = "서버에 연결하지 못했습니다: " + e;
+    fromGrid ? alert(m) : addMsg("bad", m);
   }
+}
+
+/* 추가·삭제 직후 몇 초에 걸쳐 상태를 다시 읽는다. run_once(백그라운드 판정)가 끝나는 대로
+   화면이 따라잡아 "지금 점검" 버튼을 누르지 않아도 새 종목이 뜨고 삭제분이 사라진다. */
+function burstRefresh() {
+  [0, 700, 1600, 3200, 6000].forEach(ms => setTimeout(refresh, ms));
 }
 
 $("#add-btn").onclick = openAddModal;

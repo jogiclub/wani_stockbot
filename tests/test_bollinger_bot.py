@@ -415,6 +415,16 @@ def test_remove_symbol_drops_from_watch(client):
     assert cfg["symbols"] == ["005930"] and cfg["stop_loss_pct"] == 0.03   # 다른 설정 보존
 
 
+def test_remove_symbol_clears_decision_immediately(client):
+    """삭제하면 감시 현황(decisions)에서도 즉시 빠진다 (다음 판정 주기를 기다리지 않는다)."""
+    client.post("/api/bollinger/config", json={"symbols": "005930,100130"})
+    client.bot.state.decisions = [{"종목코드": "005930", "액션": "HOLD"},
+                                  {"종목코드": "100130", "액션": "HOLD"}]
+    client.request("DELETE", "/api/bollinger/symbols", json={"symbol": "100130"})
+    codes = [d["종목코드"] for d in client.get("/api/bollinger/state").json()["decisions"]]
+    assert codes == ["005930"]
+
+
 def test_remove_symbol_refuses_held_position(client):
     """보유 중(진행 중)인 종목은 감시 목록에서 삭제할 수 없다."""
     client.post("/api/bollinger/config", json={"symbols": "005930,100130"})
