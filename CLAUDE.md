@@ -291,6 +291,8 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 - 응답에 토큰·챗ID 를 절대 담지 않는다. 성공 시 대화방 표시명만 돌려준다.
 - 시그널 알림은 **새 시그널이 있을 때만** 나간다(`TelegramNotifier.send` 는 빈 목록이면 무시,
   `DedupeNotifier` 가 중복 제거). 조용한 게 정상일 수 있다.
+- 세력추정매매(`_format`)·수급포착 알림 모두 **토스 종목 페이지 링크**를 raw URL 로 함께 보낸다
+  (미리보기는 `disable_web_page_preview=True` 로 끔). HTML 모드라 종목명은 `html.escape` 한다.
 - Chat ID 확인: 봇에게 먼저 메시지를 보낸 뒤 `https://api.telegram.org/bot<토큰>/getUpdates`.
 
 ## 공통 GNB · 정적 파일 (2026-09-18 Tailwind + AG Grid 전환)

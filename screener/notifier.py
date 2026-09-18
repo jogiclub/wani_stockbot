@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import abc
+import html
 import json
 import logging
 import re
@@ -68,15 +69,19 @@ class TelegramNotifier(Notifier):
 
     def _format(self, s: Signal) -> str:
         head = f"[{s.score.total}점 {s.score.grade} · {s.score.advice}]\n" if s.score else ""
+        # 토스 종목 페이지 링크를 함께 보낸다 (raw URL — 미리보기는 _post 가 끈다).
+        # HTML 모드라 종목명은 이스케이프한다(F&F·동국S&C 등 `&` 안전).
+        url = f"https://www.tossinvest.com/stocks/{s.symbol}"
         return (f"🚨 <b>세력 매집 돌파 포착</b>\n{head}"
-                f"<b>{s.name} ({s.symbol})</b>\n"
+                f"<b>{html.escape(s.name)} ({s.symbol})</b>\n"
                 f"· 기준봉: {s.base.date:%Y-%m-%d} (윗꼬리 {s.base.upper_tail_ratio*100:.0f}%, "
                 f"거래량 x{s.base.volume_ratio:.1f})\n"
                 f"· 매물소화: {s.adjust_days}영업일 (거래량비 {s.adjust_vol_ratio:.2f})\n"
                 f"· 전일고가 {s.prev_high:,.0f} 돌파 / 현재 {s.last_price:,.0f}\n"
                 f"· 거래량 전일 대비 +{(s.volume_ratio_prev-1)*100:.0f}%\n"
                 f"· 매수 {s.entry:,.0f} / 손절 {s.stop:,.0f} ({s.risk_pct:.1f}%)\n"
-                f"· 목표 {' / '.join(f'{t:,.0f}' for t in s.targets)}")
+                f"· 목표 {' / '.join(f'{t:,.0f}' for t in s.targets)}\n"
+                f"{url}")
 
     # 설정 창의 "테스트 전송" 이 쓰는 검증 경로.
     # 흔한 실수가 **토큰을 콜론에서 쪼개 Chat ID 칸에 넣는 것**이라 형식부터 잡아준다.
