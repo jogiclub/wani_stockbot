@@ -317,6 +317,95 @@ class TradingService:
         self._log_event({"event": "bollinger_order", **out})
         return out
 
+    # -------------------------------------------------- 지정가 매수 (볼린저 봇)
+    def limit_buy(self, *, symbol: str, quantity: int, limit_price: int,
+                  reference_price: float = 0.0, name: str = "", reason: str = "",
+                  cancel_after: float = 180.0, dry_run: bool = True) -> dict:
+        """지정가 매수 + 미체결 회수. 볼린저 봇의 진입에 쓴다.
+
+        시장가는 얇은 종목에서 슬리피지로 현재가와 크게 벌어질 수 있어, 매수는
+        **현재가 근처 상한 지정가**로 낸다(이 값 이하로만 체결). 반전 전략상 하한선
+        근처에서 사므로 대개 곧 체결되지만, `cancel_after` 안에 다 안 채워지면
+        미체결 잔량을 **취소(회수)** 한다 — 확률이 낮은 주문을 오래 두지 않는다.
+
+        매도(손절·익절)는 확실한 청산을 위해 여전히 `market_order` (시장가)를 쓴다.
+        """
+        if not re.fullmatch(r"\d{6}", symbol or ""):
+            raise TradingError("국내 주식(6자리 종목코드)만 지원합니다.")
+        quantity = int(quantity)
+        if quantity <= 0:
+            raise TradingError("주문 수량이 0입니다.")
+        limit_price = int(round_tick(limit_price, "up"))
+        amount = quantity * limit_price
+        if amount > self.max_order_amount:
+            raise TradingError(
+                f"주문 금액 {amount:,}원이 한도 {int(self.max_order_amount):,}원을 넘습니다.")
+
+        record = {"symbol": symbol, "name": name, "side": "BUY", "quantity": quantity,
+                  "limit_price": limit_price, "reference_price": reference_price,
+                  "amount": amount, "reason": reason, "dry_run": dry_run}
+
+        if dry_run:
+            out = {**record, "ok": True, "order_id": None,
+                   "message": f"모의 실행 — 지정가 {limit_price:,}원 매수 (실제 주문 없음)"}
+            self._log_event({"event": "bollinger_order", **out})
+            return out
+
+        if not self.enabled:
+            raise TradingError("실거래가 꺼져 있습니다 (TOSS_TRADING_ENABLED / 실주문 허용).")
+
+        with self._lock:                       # 동시 중복 주문 방지
+            account = self.account_seq()
+            body = {
+                "clientOrderId": _market_order_id(symbol, "BUY", quantity, tag="L"),
+                "symbol": symbol,
+                "side": "BUY",
+                "orderType": "LIMIT",
+                "timeInForce": "DAY",
+                "quantity": str(quantity),
+                "price": str(limit_price),
+            }
+            try:
+                res = self.client.create_order(account, body)
+            except TossAPIError as exc:
+                out = {**record, "ok": False, "order_id": None, "message": f"주문 실패: {exc}"}
+                self._log_event({"event": "bollinger_order", **out})
+                raise TradingError(f"매수 주문 실패: {exc}") from exc
+
+        order_id = res.get("orderId")
+        out = {**record, "ok": True, "order_id": order_id, "status": res.get("status"),
+               "message": f"매수 지정가 {limit_price:,}원 주문 접수 "
+                          f"({int(cancel_after)}초 안에 미체결이면 회수)"}
+        self._log_event({"event": "bollinger_order", **out})
+        # 미체결 회수는 백그라운드에서 감시한다 (주문 응답을 막지 않는다).
+        threading.Thread(target=self._cancel_unfilled, args=(account, order_id, cancel_after),
+                         name=f"bl-cancel-{symbol}", daemon=True).start()
+        return out
+
+    def _cancel_unfilled(self, account: int, order_id: str, cancel_after: float) -> None:
+        """`cancel_after` 초 뒤에도 다 체결되지 않은 지정가 매수를 취소한다."""
+        if not order_id:
+            return
+        time.sleep(max(1.0, cancel_after))
+        try:
+            order = self.client.get_order(account, order_id)
+        except Exception as exc:
+            log.warning("주문 %s 조회 실패 — 회수 판단 보류: %s", order_id, exc)
+            return
+        status = str(order.get("status", ""))
+        if status in ("FILLED", "COMPLETED", "EXECUTED", "CANCELED", "REJECTED", "EXPIRED"):
+            return                              # 이미 끝난 주문은 손대지 않는다
+        try:
+            self.client.cancel_order(account, order_id)
+            filled = _filled_qty(order)
+            log.info("주문 %s 미체결 회수 (체결 %d주)", order_id, filled)
+            self._log_event({"event": "bollinger_cancel", "orderId": order_id,
+                             "filled": filled, "reason": "미체결 회수(시한 초과)"})
+        except Exception as exc:
+            log.error("주문 %s 회수 실패 — 수동 확인 필요: %s", order_id, exc)
+            self._log_event({"event": "bollinger_cancel_failed",
+                             "orderId": order_id, "error": str(exc)})
+
     # ------------------------------------------------------------ 체결 후 OCO
     def _attach_oco_when_filled(self, account: int, order_id: str, plan: OrderPlan,
                                 timeout: float | None = None,
@@ -408,10 +497,11 @@ def _client_order_id(plan: OrderPlan, suffix: str = "") -> str:
     return (base + ("-" + suffix if suffix else ""))[:36]
 
 
-def _market_order_id(symbol: str, side: str, quantity: int) -> str:
-    """시장가 주문 멱등키. 분 단위 버킷이라 같은 분의 중복 발사만 하나로 접힌다
-    (멱등키는 10분간 유효하므로 시각을 넣지 않으면 정상 재진입까지 막힌다)."""
-    return f"bl-{symbol}-{side[0]}-{datetime.now():%m%d%H%M}-{quantity}"[:36]
+def _market_order_id(symbol: str, side: str, quantity: int, tag: str = "") -> str:
+    """봇 주문 멱등키. 분 단위 버킷이라 같은 분의 중복 발사만 하나로 접힌다
+    (멱등키는 10분간 유효하므로 시각을 넣지 않으면 정상 재진입까지 막힌다).
+    `tag` 로 시장가(빈값)와 지정가("L") 매수 키가 겹치지 않게 한다."""
+    return f"bl{tag}-{symbol}-{side[0]}-{datetime.now():%m%d%H%M}-{quantity}"[:36]
 
 
 def _mask(account_no: str) -> str:

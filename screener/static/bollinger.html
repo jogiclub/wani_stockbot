@@ -193,7 +193,7 @@ function paint() {
   $("#live").hidden = !s.live;
   if (s.live) {
     $("#live").innerHTML = `<b>⚠ 실주문 모드입니다.</b>
-      <span>조건이 맞으면 <b>확인 없이 즉시 시장가 주문</b>이 나갑니다 —
+      <span>조건이 맞으면 <b>확인 없이 즉시 주문</b>이 나갑니다 (매수는 지정가, 매도는 시장가) —
       1회 한도 ${fmt(s.max_order_amount)}원 · 예수금의 ${(cfg.cash_ratio * 100).toFixed(0)}% ·
       동시 ${cfg.max_positions}종목까지.</span>`;
   }
@@ -460,6 +460,14 @@ function renderConfig() {
         <div><label class="${u.label}" for="c-poll">점검 주기(초)</label>
           <input class="${u.input}" type="number" id="c-poll" min="20" max="3600" step="10" value="${STATE.poll_interval}"></div>
       </div>
+      <div class="${GRID3}">
+        <div><label class="${u.label}" for="c-slip">매수 지정가 상단(%)</label>
+          <input class="${u.input}" type="number" id="c-slip" min="0" max="5" step="0.1" value="${((c.buy_slippage || 0) * 100).toFixed(1)}">
+          <div class="${u.hint}">현재가 + 이 % 를 상한으로 지정가 매수 (0이면 현재가). 너무 비싼 값에 안 사도록 슬리피지를 제한합니다</div></div>
+        <div><label class="${u.label}" for="c-cancel">미체결 회수(초)</label>
+          <input class="${u.input}" type="number" id="c-cancel" min="30" max="3600" step="30" value="${c.buy_cancel_after || 180}">
+          <div class="${u.hint}">이 시간 안에 체결 안 되면 매수 주문을 취소합니다 (기본 180초=3분)</div></div>
+      </div>
     </fieldset>
 
     <fieldset class="${u.fieldset} !mb-0">
@@ -502,6 +510,8 @@ function renderConfig() {
       max_positions: Number($("#c-maxpos").value),
       min_order_amount: Number($("#c-minamt").value),
       poll_interval: Number($("#c-poll").value),
+      buy_slippage: Number($("#c-slip").value) / 100,
+      buy_cancel_after: Number($("#c-cancel").value),
       stop_loss_pct: Number($("#c-stop").value) / 100,
       mid_take_ratio: Number($("#c-midratio").value) / 100,
       mid_take_profit: $("#c-midtp").checked,
@@ -542,7 +552,8 @@ function renderRules() {
     <ul>
       <li>현재가 ≤ 하한선 (중앙선 − ${c.bb_stddev}σ, ${c.bb_period}봉)</li>
       <li>그리고 RSI(${c.rsi_period}) ≤ ${c.rsi_buy} — 과매도 확인</li>
-      <li>→ 예수금의 ${(c.cash_ratio * 100).toFixed(0)}% 로 <b>시장가 매수</b>
+      <li>→ 예수금의 ${(c.cash_ratio * 100).toFixed(0)}% 로 <b>지정가 매수</b>
+        (현재가 +${((c.buy_slippage||0)*100).toFixed(1)}% 상한, ${c.buy_cancel_after||180}초 미체결 시 회수)
         (1회 한도 ${fmt(STATE.max_order_amount)}원, 동시 ${c.max_positions}종목까지)</li>
     </ul>
 
@@ -575,7 +586,7 @@ function renderRules() {
     <h3 class="${H3}">한계</h3>
     <ul>
       <li>추세가 강한 구간에서는 밴드를 타고 계속 밀리므로 손절이 반복될 수 있습니다.</li>
-      <li>시장가 주문이라 호가가 얇은 종목에서는 <b>체결 슬리피지</b>가 커집니다.</li>
+      <li>매수는 지정가(현재가 근처 상한)라 슬리피지를 제한하지만, <b>급락 중엔 미체결로 진입을 놓칠</b> 수 있습니다. 매도(손절·익절)는 확실한 청산을 위해 시장가입니다.</li>
       <li>세력추정매매와 달리 이 전략은 <b>이 저장소에서 백테스트로 검증된 수치가 없습니다</b> —
         소액·모의로 충분히 관찰한 뒤 쓰세요.</li>
     </ul>

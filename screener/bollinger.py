@@ -70,6 +70,11 @@ class BollingerConfig:
     cash_ratio: float = 0.20       # 1회 매수에 쓸 예수금 비율 (X%)
     max_positions: int = 3         # 동시 보유 종목 수 상한
     min_order_amount: float = 50_000.0   # 이 금액 미만이면 주문하지 않는다
+    # 매수는 **지정가**로 낸다 (시장가 슬리피지로 현재가와 크게 벌어지는 것 방지).
+    # 지정가 = 현재가 × (1 + buy_slippage) 를 호가 단위로 올림 — 이 값 이하로만 체결된다.
+    buy_slippage: float = 0.005    # 현재가 대비 매수 지정가 허용 상단 (0.5%)
+    # 지정가가 이 시간 안에 다 체결되지 않으면 미체결분을 회수(취소)한다.
+    buy_cancel_after: int = 180    # 초 (기본 3분)
 
     # ---- 리스크 관리 ----
     stop_loss_pct: float = 0.05    # 매수가 대비 -Y% 강제 손절 (밴드 라이딩 방지)
@@ -116,6 +121,8 @@ class BollingerConfig:
             max_positions=_clamp_int(body.get("max_positions"), d.max_positions, 1, 20),
             min_order_amount=_clamp(body.get("min_order_amount"), d.min_order_amount,
                                     1_000.0, 1e9),
+            buy_slippage=_clamp(body.get("buy_slippage"), d.buy_slippage, 0.0, 0.05),
+            buy_cancel_after=_clamp_int(body.get("buy_cancel_after"), d.buy_cancel_after, 30, 3600),
             stop_loss_pct=_clamp(body.get("stop_loss_pct"), d.stop_loss_pct, 0.005, 0.5),
             mid_take_profit=bool(body.get("mid_take_profit", d.mid_take_profit)),
             mid_take_ratio=_clamp(body.get("mid_take_ratio"), d.mid_take_ratio, 0.1, 1.0),

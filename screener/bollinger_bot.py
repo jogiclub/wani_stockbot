@@ -28,7 +28,7 @@ import pandas as pd
 from .bollinger import (BollingerConfig, Decision, Position, enrich, evaluate,
                         position_size, prepare)
 from .toss_client import TossClient
-from .trading import TradingError, TradingService
+from .trading import TradingError, TradingService, round_tick
 
 log = logging.getLogger(__name__)
 
@@ -306,14 +306,17 @@ class BollingerBot:
         if held >= self.cfg.max_positions:
             return self._skip(d, f"동시 보유 상한 {self.cfg.max_positions}종목 도달")
 
-        qty = position_size(self.state.cash, d.snapshot.close, self.cfg,
+        # 매수는 지정가로 낸다 — 현재가 대비 buy_slippage 만큼 위를 상한으로.
+        # 수량도 이 지정가 기준으로 산정해 1회 한도를 넘지 않게 한다.
+        limit = round_tick(d.snapshot.close * (1 + self.cfg.buy_slippage), "up")
+        qty = position_size(self.state.cash, limit, self.cfg,
                             self.trading.max_order_amount)
         if qty <= 0:
             return self._skip(
                 d, f"예수금 {self.state.cash:,.0f}원 × {self.cfg.cash_ratio * 100:.0f}% 로는 "
                    f"{self.cfg.min_order_amount:,.0f}원 최소 주문에 미달")
 
-        result = self._order(d, "BUY", qty)
+        result = self._order(d, "BUY", qty, limit_price=limit)
         if result.get("ok"):
             pos = self.positions.setdefault(d.symbol, Position(symbol=d.symbol))
             pos.name = self._name(d.symbol)
@@ -353,19 +356,30 @@ class BollingerBot:
             log.debug("%s 매도가능수량 조회 실패, 보유수량으로 진행: %s", symbol, exc)
             return fallback
 
-    def _order(self, d: Decision, side: str, quantity: int) -> dict:
+    def _order(self, d: Decision, side: str, quantity: int,
+               limit_price: int | None = None) -> dict:
+        """매수는 지정가(+미체결 회수), 매도는 시장가로 주문한다."""
         try:
-            out = self.trading.market_order(
-                symbol=d.symbol, side=side, quantity=quantity,
-                reference_price=d.snapshot.close, name=self._name(d.symbol),
-                reason=f"{d.action}: {d.reason}", dry_run=not self.live)
+            if side == "BUY":
+                out = self.trading.limit_buy(
+                    symbol=d.symbol, quantity=quantity, limit_price=int(limit_price),
+                    reference_price=d.snapshot.close, name=self._name(d.symbol),
+                    reason=f"{d.action}: {d.reason}",
+                    cancel_after=self.cfg.buy_cancel_after, dry_run=not self.live)
+                price, kind = int(limit_price), f"지정가 {int(limit_price):,}원"
+            else:
+                out = self.trading.market_order(
+                    symbol=d.symbol, side=side, quantity=quantity,
+                    reference_price=d.snapshot.close, name=self._name(d.symbol),
+                    reason=f"{d.action}: {d.reason}", dry_run=not self.live)
+                price, kind = d.snapshot.close, f"시장가 (현재 {d.snapshot.close:,.0f}원)"
         except TradingError as exc:
             self._event(d, "실패", str(exc))
             return {"ok": False, "message": str(exc)}
 
-        amount = quantity * d.snapshot.close
+        amount = quantity * price
         text = (f"{'[실주문]' if self.live else '[모의]'} {self._name(d.symbol)}({d.symbol}) "
-                f"{_LABEL[d.action]} {quantity:,}주 @ {d.snapshot.close:,.0f}원 "
+                f"{_LABEL[d.action]} {quantity:,}주 {kind} "
                 f"≈ {amount:,.0f}원 — {d.reason}")
         self._event(d, "접수", text, order_id=out.get("order_id"))
         return out

@@ -76,6 +76,15 @@ class FakeClient:
         self.orders.append({"account": account_seq, **body})
         return {"orderId": "ORD-1", "status": "PENDING"}
 
+    # -- 주문 조회/취소 (지정가 미체결 회수용). 기본은 계속 미체결. --
+    def get_order(self, account_seq, order_id):
+        return {"status": "PENDING", "execution": {"filledQuantity": "0"}}
+
+    def cancel_order(self, account_seq, order_id):
+        self.canceled = getattr(self, "canceled", [])
+        self.canceled.append(order_id)
+        return {"ok": True}
+
 
 class ExplodingClient(FakeClient):
     def create_order(self, *a, **k):
@@ -117,15 +126,19 @@ def test_live_switch_requires_trading_enabled():
     bot.run_once()                               # ExplodingClient 라 실주문이면 실패한다
 
 
-def test_live_bot_places_market_buy():
-    bot, client = make_bot(enabled=True, live=True, cash_ratio=0.5, min_order_amount=10_000)
+def test_live_bot_places_limit_buy():
+    """매수는 지정가로 낸다 — 현재가보다 buy_slippage 만큼 위를 상한으로."""
+    bot, client = make_bot(enabled=True, live=True, cash_ratio=0.5, min_order_amount=10_000,
+                           buy_slippage=0.005)
+    close = client.close[-1]
     bot.run_once()
     assert len(client.orders) == 1
     order = client.orders[0]
-    assert order["side"] == "BUY" and order["orderType"] == "MARKET"
-    assert "price" not in order                  # 시장가에 price 를 넣으면 400 이다
+    assert order["side"] == "BUY" and order["orderType"] == "LIMIT"
+    assert int(order["price"]) >= close          # 현재가 이상(슬리피지 상한) — 지정가
+    assert int(order["price"]) <= close * 1.006  # 대략 +0.5% 안쪽(호가 올림 여유)
     assert int(order["quantity"]) > 0
-    assert order["clientOrderId"].startswith("bl-005930-B-")
+    assert order["clientOrderId"].startswith("blL-005930-B-")   # 지정가 태그(L)
 
 
 def test_buy_amount_respects_order_cap():
@@ -446,3 +459,33 @@ def test_remove_symbol_allows_zero_quantity_position(client):
 def test_remove_symbol_rejects_bad_code(client, bad):
     assert client.request("DELETE", "/api/bollinger/symbols",
                           json={"symbol": bad}).status_code == 400
+
+
+# ------------------------------------------------------------------ 지정가 회수
+def test_limit_buy_cancels_unfilled_after_timeout():
+    """지정가 매수가 시한 안에 안 채워지면 미체결분을 회수(취소)한다."""
+    import time
+    from screener.trading import TradingService
+    client = FakeClient()                       # get_order 가 계속 미체결을 준다
+    trading = TradingService(client, enabled=True, max_order_amount=10_000_000, account_seq=7)
+    out = trading.limit_buy(symbol="005930", quantity=10, limit_price=1000,
+                            reference_price=990, cancel_after=0.05, dry_run=False)
+    assert out["ok"] and client.orders[0]["orderType"] == "LIMIT"
+    for _ in range(100):                        # 회수 스레드가 취소할 때까지 잠깐 기다린다
+        if getattr(client, "canceled", None):
+            break
+        time.sleep(0.02)
+    assert client.canceled == ["ORD-1"]
+
+
+def test_limit_buy_keeps_filled_order():
+    """이미 체결된 주문은 회수하지 않는다."""
+    import time
+    from screener.trading import TradingService
+    client = FakeClient()
+    client.get_order = lambda a, o: {"status": "FILLED", "execution": {"filledQuantity": "10"}}
+    trading = TradingService(client, enabled=True, max_order_amount=10_000_000, account_seq=7)
+    trading.limit_buy(symbol="005930", quantity=10, limit_price=1000,
+                      cancel_after=0.05, dry_run=False)
+    time.sleep(0.2)
+    assert getattr(client, "canceled", []) == []
