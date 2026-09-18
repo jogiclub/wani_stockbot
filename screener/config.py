@@ -132,6 +132,21 @@ class AppConfig:
         default_factory=lambda: int(os.getenv("TOSS_ACCOUNT_SEQ")) if os.getenv("TOSS_ACCOUNT_SEQ") else None)
     order_log: Path = field(default_factory=lambda: PROJECT_ROOT / "out" / "orders.jsonl")
 
+    # ---- 로그인 · 설정 저장 (SQLite) ----
+    # `app_secret_key` 는 DB 에 저장된 자격증명을 푸는 열쇠다. 바꾸면 저장값을 못 읽는다.
+    # 초기 계정 비밀번호는 **코드에 두지 않는다** — `.env` 의 APP_ADMIN_PASSWORD 로 준다.
+    db_path: Path = field(
+        default_factory=lambda: Path(os.getenv("APP_DB_PATH") or (PROJECT_ROOT / "cache" / "app.db")))
+    app_secret_key: str = field(default_factory=lambda: os.getenv("APP_SECRET_KEY", "jogiclub"))
+    admin_user: str = field(default_factory=lambda: os.getenv("APP_ADMIN_USER", "jogiclub"))
+    admin_password: str = field(default_factory=lambda: os.getenv("APP_ADMIN_PASSWORD", ""))
+    # 회원가입: 켜면 로그인 화면에서 누구나 **일반 사용자** 계정을 만들 수 있다.
+    # 일반 사용자는 자기 토스 키로만 주문·봇을 쓴다 (서버 `.env` 계좌는 관리자 전용).
+    # APP_SIGNUP_CODE 를 넣으면 그 초대 코드를 아는 사람만 가입할 수 있다.
+    signup_enabled: bool = field(
+        default_factory=lambda: os.getenv("APP_SIGNUP", "true").lower() in ("1", "true", "yes", "on"))
+    signup_code: str = field(default_factory=lambda: os.getenv("APP_SIGNUP_CODE", ""))
+
     def require_toss(self) -> None:
         if not self.toss_client_id or not self.toss_client_secret:
             raise RuntimeError(

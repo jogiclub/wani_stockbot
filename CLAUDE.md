@@ -3,8 +3,11 @@
 > 이 문서는 프로젝트 지침서다. **새로 확인된 사실·결정·API 스펙은 여기에 계속 누적 기록한다.**
 
 ## 프로젝트 목표
-두 전략을 한 대시보드에서 돌린다. 상단 GNB 로 화면을 오간다 (브랜드: **왔니 주식**).
+세 전략을 한 대시보드에서 돌린다. 상단 GNB 로 화면을 오간다 (브랜드: **왔니 주식**).
+GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반전 매매**.
 
+0. **수급포착매매** (`/supply`) — 장 초반 거래량 급증 + 수급 연속성으로 주도주를 포착하는
+   관찰용 스크리너. 주문 없음, **백테스트 미검증** (아래 "수급 포착 매매" 절).
 1. **세력추정매매** (`/`) — 바닥권에서 대량 거래량을 동반한 윗꼬리 캔들(기준봉/매집봉) 발생 →
    매물 소화(조정) → **전일 고가**를 거래량과 함께 돌파하는 순간을 포착해 KOSPI/KOSDAQ 을 스크리닝.
 2. **볼린저 밴드 반전 매매** (`/bollinger`) — 박스권에서 밴드 하한 + RSI 과매도에 사고
@@ -24,6 +27,9 @@
 | `screener/regime.py` | 시장 국면 판정 (`MarketRegime`) — 지수 vs 이동평균 |
 | `screener/scoring.py` | 진입 점수 100점 산정 (`score_signal`) — 배점은 백테스트 실측 기반 |
 | `screener/backtest.py` | 백테스트 엔진. `Backtester`(시그널 재현 + 청산 시뮬), `ExitPolicy`, `Trade`, `BacktestResult` |
+| `screener/supply.py` | 수급 포착 매매 (`SupplyConfig`·`evaluate`·`SupplyScanner`·`SupplyService`) |
+| `screener/static/supply.html` | 수급포착매매 화면 (`/supply`). 당일 1분봉·VWAP·누적 거래량·누적 매수세 SVG |
+| `screener/static/stockmenu.js` | **공통 종목 메뉴 모달** (토스로 보기 / 반전 매매에 종목추가) |
 | `screener/bollinger.py` | 볼린저 반전 전략 지표·판정 엔진 (`BollingerConfig`, `rsi`, `bollinger_bands`, `prepare`, `decide`, `evaluate`) |
 | `screener/bollinger_bot.py` | 볼린저 자동매매 루프 (`BollingerBot`) — 잔고 동기화 → 판정 → 시장가 주문 |
 | `screener/web.py` | FastAPI 대시보드 + JSON API. 요청마다 세션/서버 스캐너를 골라 쓴다 |
@@ -31,10 +37,11 @@
 | `screener/sessions.py` | 접속자별 토스 API 키 세션 (`SessionManager`·`UserSession`·`SessionSettings`) |
 | `screener/static/dashboard.html` | 세력추정매매 화면 (`/`). vanilla JS + 인라인 SVG 캔들/거래량 차트 |
 | `screener/static/bollinger.html` | 볼린저 반전 매매 화면 (`/bollinger`). 밴드+RSI 인라인 SVG 차트 |
-| `screener/static/common.css` | **두 화면 공통** 테마 토큰 · GNB · 설정 모달 스타일 |
+| `screener/static/ui.js` | **공통 UI 기반** — Tailwind 설정(색 토큰 매핑) + `UI.cls`(버튼·폼·카드 클래스 묶음) + `Grid.create()`(AG Grid 헬퍼) |
+| `screener/static/common.css` | **테마 토큰(CSS 변수)만** — 화면 스타일은 Tailwind 로 쓴다. `.tint-*`·`.dot-*`·AG Grid 미세 규칙·`[hidden]` 가드만 남김 |
 | `screener/static/gnb.js` | **공통 GNB**(왔니 주식 브랜드 + 메뉴) + 테마 토글 |
-| `screener/static/session.js` | **공통 설정 모달**(개인 토스 API 키 세션) |
-| `main.py` | CLI: `scan` `watch` `poll` `web` `backtest` `explain` `demo` `bollinger` |
+| `screener/static/session.js` | **공통 모달 2개** — 🔑 API 키(자격증명) / ⚙ 설정(스캔·알림·주문·자동매수) |
+| `main.py` | CLI: `scan` `watch` `poll` `web` `backtest` `explain` `demo` `bollinger` `adduser` `supply` |
 | `poc.py` | API 없이 도는 최소 동작 예시 |
 | `tests/` | pytest 단위 테스트 (외부 API 불필요) |
 
@@ -107,13 +114,24 @@
 **서버 `.env` 키는 이제 선택 사항**이다 — 없으면 웹은 접속자가 설정 창에 넣은 개인 키로 돈다(아래).
 
 ### 접속자별 개인 API 키 (screener/sessions.py)
-- 대시보드 상단 **⚙ 설정** → `POST /api/session` → `SessionManager.create` 가 그 자격증명 전용
+- **창은 둘로 나뉜다** (2026-09-18): GNB 의 **🔑 API 키 설정** 은 자격증명만
+  (`POST /api/session`), **⚙ 설정** 은 스캔 범위·텔레그램·주문·자동매수
+  (`POST /api/session/settings`, `_SETTING_KEYS` 만 받고 **자격증명은 받지 않는다**).
+  예전에는 설정을 조금 고칠 때도 client_id/secret 을 다시 입력해야 했다.
+  - 설정 저장은 저장된 키로 **세션을 다시 연다**(`_open_session`) — 스캔 주기·알림·주문 설정이
+    스캐너·봇 생성 시점에 박히기 때문. 실행 중이던 볼린저 봇은 멈추므로 화면에서 다시 시작해야 한다.
+  - `SessionSettings.from_body(body, defaults=...)` 는 **누락 키를 defaults 로 채운다**
+    (`trading_opt_in`·`auto_buy`·텔레그램도 포함 — 예전엔 이 셋만 False/빈값으로 떨어져
+    키만 다시 넣으면 설정이 초기화됐다). 빈 봇 토큰은 저장값 유지.
+  - 키가 없는 사용자가 ⚙ 설정을 열면 400 이므로 화면이 자동으로 🔑 창으로 보낸다.
+- 대시보드 상단 **🔑 API 키 설정** → `POST /api/session` → `SessionManager.create` 가 그 자격증명 전용
   `TossClient` → `TossDataLoader` → `Screener` → `ScanService`(+`TradingService`) 를 만들고
   세션 쿠키 `sf_session`(HttpOnly·SameSite=Lax)을 발급한다.
 - **키는 서버 메모리에만 둔다.** 디스크 기록·응답 반환 금지. 화면에는 `mask()` 한 client_id 만.
   `UserSession.info()` 에 secret 계열 필드를 추가하지 말 것 (회귀 테스트 있음).
 - 저장 시 `client.prices(["005930"])` 로 실호출 검증 → 400/401/403 이면 키·허용 IP 문제로 안내.
-- 세션마다 스캔 스레드가 1개 뜬다. `--max-sessions`(기본 8) 상한, 유휴 6시간이면 `sweep()` 이 폐기.
+- 세션마다 스캔 스레드가 1개 뜬다. `--max-sessions`(기본 20) 상한, 유휴 6시간이면 `sweep()` 이 폐기
+  (볼린저 봇이 실행 중인 세션은 제외).
 - 일봉 캐시(`cache/candles`)는 시세라 전 세션이 공유한다. **토큰 캐시는 `token_cache_path()` 로
   client_id 해시별 분리** (`cache/tokens/<hash>.json`) — 같은 키는 공유해 서로 무효화하지 않고,
   다른 키는 갈라진다. `main.build_loader` 도 같은 함수를 쓴다(예전 `cache/token.json` 은 폐기).
@@ -128,8 +146,22 @@
   기본 1000, 다르면 `docker build --build-arg APP_UID=$(id -u) --build-arg APP_GID=$(id -g) .`
   (compose 는 `APP_UID`/`APP_GID` 환경변수로 전달)
 - `docker-compose.yml` 서비스
-  - `poller` — 장중 상시 감시 데몬 (`restart: unless-stopped`, 로그 로테이션 10MB×5)
-  - `screener` / `demo` — `profiles: ["manual"]` 이라 `up` 시 안 뜬다. `docker compose --profile manual run --rm <서비스>` 로 실행.
+  - `web` — **기본 운영 서비스**. `docker compose up -d` 로 뜨는 건 이것뿐이다.
+    커맨드는 `web --port 8083 --top 200 --interval 120 --live` 로, poller 가 하던
+    **장중 실시간 돌파 감시(`--live`)를 web 의 `ScanService` 가 대신한다.**
+    `--live` 가 빠지면 일봉 종가 기준이라 돌파를 그날 장 마감 후에야 잡는다.
+    실측: 200종목 1주기 약 40초 → 120초 주기에 여유가 있고 429 는 나지 않았다(2주기 관찰).
+  - `poller` / `screener` / `demo` — `profiles: ["manual"]` 이라 `up` 시 안 뜬다.
+    `docker compose --profile manual run --rm <서비스>` (poller 는 `--profile manual up -d poller`) 로 실행.
+    **poller 를 기본에서 뺀 이유**: web 이 poller 기능을 포함하는데 둘을 같은 자격증명으로 띄우면
+    토큰을 서로 무효화하고 TPS 합산 초과로 429 가 난다. 굳이 함께 돌리려면 자격증명을 분리할 것.
+- **`.env` 를 고쳤으면 `restart` 가 아니라 `up -d` 로 컨테이너를 재생성해야 한다.**
+  `env_file` 은 **컨테이너 생성 시점에 한 번만** 주입되므로 `docker compose restart` 는
+  옛 환경변수를 그대로 재사용한다. 실제로 겪은 일: 키를 갱신했는데도 컨테이너가 계속
+  `401 invalid_client` 로 크래시 루프를 돌았다. 확인법:
+  `[ "$(docker exec <컨테이너> printenv TOSS_CLIENT_ID)" = "$TOSS_CLIENT_ID" ]`
+- **`/healthz` 가 healthy 라고 자격증명이 정상인 건 아니다.** 헬스체크는 합성 데이터로
+  탐지 엔진만 검증한다. 키 상태는 로그의 `랭킹 후보 N 종목` / `스캔 완료` 로 판단할 것.
 - `.env` 는 이미지에 넣지 않고(`.dockerignore`) `env_file` 로 런타임 주입한다.
 - HEALTHCHECK 는 합성 데이터로 탐지 엔진만 검증하므로 API 자격증명 없이도 통과한다.
 
@@ -187,10 +219,96 @@
 - 시장가 주문이라 호가가 얇은 종목에서 슬리피지가 크다.
 - 추세장에서는 밴드를 타고 밀려 손절이 반복된다 (전략 자체의 성질).
 
-## 공통 GNB · 정적 파일
-- 두 화면은 `/static/common.css`(테마 토큰·GNB·모달) + `/static/gnb.js`(GNB·테마 토글)
-  + `/static/session.js`(개인 API 키 설정 모달) 를 공유한다. `web.py` 가 `/static` 을 mount 한다.
-- 테마 토글과 ⚙설정 버튼은 **GNB 로 옮겼다.** 페이지는 `<div data-gnb="screener|bollinger">` 자리표시자와
+## 로그인 · 설정 서버 저장 (screener/store.py)
+- 대시보드는 **아이디/비밀번호 로그인**을 거친다. 저장소는 SQLite `cache/app.db`
+  (`APP_DB_PATH` 로 변경). `main.py web` 이 `Store` 를 만들어 `create_app(store=...)` 로 넘긴다.
+  `--no-login` 이면 예전처럼 인증 없이 뜬다.
+- 테이블: `users(username, password_hash, …)` · `settings(username, payload, …)` ·
+  `auth_tokens(token_hash, username, expires_at)` · `bollinger_configs(owner, payload, …)`.
+- **볼린저 설정 영속화**: `POST /api/bollinger/config`·`/symbols` 가 저장하고(`persisted` 응답),
+  세션 생성(`_restore`, `POST /api/session`)과 서버 시작 시 `_bb_load` 로 되살린다.
+  owner 는 `user:<아이디>`(개인 세션 봇) 또는 `server`(서버 기본 봇). 로그인을 안 쓰면 저장하지 않는다.
+  **`manage_existing` 은 저장하지 않는다**(`BB_NOT_PERSISTED`) — 기존 보유분 청산 스위치라
+  재시작 뒤에는 항상 False 로 돌아가야 한다. 복구해도 봇은 **자동 시작하지 않는다**.
+  `DELETE /api/session`(연결 해제)은 API 키 설정만 지우고 볼린저 설정은 남긴다.
+- **비밀번호는 scrypt 해시로만** 저장한다(복호화 불가). **로그인 토큰도 sha256 해시만** 저장해
+  DB 가 새도 쿠키를 만들 수 없다. 쿠키 `sf_auth`(HttpOnly·SameSite=Lax·30일).
+- 설정(`SessionSettings` 전체)은 로그인 사용자별로 저장된다. `SECRET_FIELDS`
+  (`client_secret`, `telegram_bot_token`)는 **Fernet 으로 암호화**해 넣는다.
+  키는 `APP_SECRET_KEY`(기본 `jogiclub`) → scrypt 로 늘려 파생. **키를 바꾸면 저장값을 못 푼다**
+  (복호화 실패 시 빈 값으로 돌려 다시 입력받는다 — 회귀 테스트 있음).
+  → 즉 **DB 파일만 유출되면 안전하지만 `.env` 까지 함께 새면 풀린다.** 백업 시 둘을 같이 두지 말 것.
+- 인증 게이트는 `web.py` 의 `require_login` 미들웨어다. 공개 경로는 `PUBLIC_PATHS`
+  (`/login`, `/api/login`, `/api/signup`, `/api/auth/options`, `/healthz`, `/favicon.ico`)와 `/static/**` 뿐.
+  HTML GET 은 `/login` 으로 302, 그 외에는 401 JSON.
+- 로그인하면 저장된 설정으로 **토스 세션을 자동 복구**한다(`_restore`). 복구 실패는 60초 쿨다운을
+  둬 매 요청마다 토스 API 를 두드리지 않는다. `user_sids` 가 사용자→sid 를 들고 있어
+  쿠키를 잃어도(서버 재시작·다른 브라우저) 로그인만으로 이어진다.
+- `POST /api/session` 은 저장까지 하고, `DELETE /api/session` 은 **저장된 설정도 지운다**.
+  로그아웃(`POST /api/logout`)은 토큰만 버리고 설정은 남긴다.
+- 계정 관리 CLI: `python main.py adduser <아이디>` (없으면 생성, 있으면 비밀번호 변경).
+  비밀번호는 `getpass` 로 받는다 — `--password` 는 셸 기록에 남으니 피할 것.
+  첫 실행 시 `.env` 의 `APP_ADMIN_USER`/`APP_ADMIN_PASSWORD` 가 있으면 그 계정을 만든다.
+  **비밀번호 기본값을 코드에 넣지 말 것** (`AppConfig.admin_password` 기본값은 빈 문자열).
+- 의존성 `cryptography` 추가됨 (requirements.txt).
+
+### 다중 사용자 (2026-09-17) — 약화시키지 말 것
+- **관리자 / 일반 사용자 구분** (`users.is_admin`, 예전 DB 는 시작 시 열 자동 추가).
+  서버 `.env` 계좌를 쓰는 **주문(`/api/trading/*`)·서버 볼린저 봇은 관리자만** 쓴다
+  (`_server_trading`/`_server_bot`). 일반 사용자는 자기 토스 키 세션으로만 주문·봇을 쓴다.
+  시세 화면(세력추정 스캔·수급)은 서버 키로 모든 로그인 사용자가 공유한다.
+  관리자 지정: `APP_ADMIN_USER` 계정이 자동 관리자(관리자가 하나도 없으면 승격),
+  또는 `python main.py adduser <아이디> --admin`. 마지막 관리자는 탈퇴할 수 없다.
+- **세션-계정 결속**: `UserSession.owner` = 로그인 아이디. `_session()` 은 쿠키의 세션이라도
+  owner 가 현재 로그인 계정과 다르면 무시한다. 예전에는 같은 브라우저에서 A 로그아웃 → B 로그인 시
+  `sf_session` 쿠키가 남아 **B 가 A 의 키·계좌로 주문할 수 있었다** (회귀 테스트 있음).
+  로그아웃·로그인·가입 응답은 `sf_session` 쿠키를 지운다(복구된 내 세션이면 새로 준다).
+  세션 재설정·연결 해제도 남의 세션은 drop 하지 않는다(`_drop_own_cookie_session`).
+- **회원가입** `POST /api/signup` — `APP_SIGNUP`(기본 true) / `APP_SIGNUP_CODE`(초대 코드, 외부 공개 시 권장).
+  가입자는 항상 일반 사용자. 아이디 규칙 `[A-Za-z0-9][A-Za-z0-9_.-]{2,31}`, 비밀번호 8자 이상.
+  로그인 화면은 `GET /api/auth/options` 로 가입 탭 노출 여부를 정한다 (`?signup` 딥링크).
+- **내 계정 창**(GNB 아이디 클릭): `POST /api/account/password`(변경 시 다른 기기 토큰 전부 폐기),
+  `DELETE /api/account`(비밀번호 확인 → 세션 정지 + users·settings·auth_tokens·bollinger_configs 삭제).
+- **로그인 시도 제한**: (IP, 아이디)당 5분에 5회 실패하면 429 (메모리 보관, 재시작 시 초기화).
+  가입 초대 코드 오입력도 같은 방식으로 제한한다.
+- **주문·볼린저 로그 사용자별 분리**: 로그인 세션은 `out/users/<아이디>/orders.jsonl`·`bollinger.log`
+  (`SessionManager.log_paths`). 서버 기본 봇·로그인 미사용 서버는 기존 `out/` 그대로.
+- **자동매매 봇이 도는 세션은 유휴 6시간이 지나도 폐기하지 않는다** (`UserSession.idle`).
+  예전에는 화면을 안 보면 봇이 조용히 멈췄다.
+- `--max-sessions` 기본 8 → **20** (여러 사용자 동시 접속).
+- 시작 시 `APP_SECRET_KEY` 가 기본값(`jogiclub`/`change-me`)이면 경고를 찍는다.
+  **운영 DB 가 이미 기본 키로 암호화돼 있으므로 바꾸면 모든 사용자가 키를 다시 입력해야 한다.**
+
+## 텔레그램 알림
+- 세션 설정 창(⚙ 설정)의 **Bot Token 은 BotFather 문자열 전체**(`123456789:AA…`, 콜론 포함),
+  **Chat ID 는 대화방 숫자 ID** 다. 실제로 토큰을 콜론에서 쪼개 뒷부분만 Chat ID 칸에 넣고
+  Bot Token 을 비워 두는 실수가 있었다 — 이때 `sessions.create` 는 두 값이 **모두** 있어야
+  `TelegramNotifier` 를 붙이므로 알림이 조용히 꺼진다.
+- 그래서 설정 창에 **"테스트 전송"** 버튼을 뒀다: `POST /api/session/telegram/test`
+  → `TelegramNotifier.check()` 가 형식 검증 후 실제로 1건 보내고, 실패하면
+  `TelegramError` 한국어 안내(401=토큰 폐기, `chat not found`=챗ID·선대화 필요 등)를 400 으로 준다.
+  입력 칸이 비어 있으면 **저장된 세션 값**으로 확인한다(저장 후 토큰 칸은 비워지기 때문).
+- 응답에 토큰·챗ID 를 절대 담지 않는다. 성공 시 대화방 표시명만 돌려준다.
+- 시그널 알림은 **새 시그널이 있을 때만** 나간다(`TelegramNotifier.send` 는 빈 목록이면 무시,
+  `DedupeNotifier` 가 중복 제거). 조용한 게 정상일 수 있다.
+- Chat ID 확인: 봇에게 먼저 메시지를 보낸 뒤 `https://api.telegram.org/bot<토큰>/getUpdates`.
+
+## 공통 GNB · 정적 파일 (2026-09-18 Tailwind + AG Grid 전환)
+- `<head>` 스크립트 순서(모든 화면 동일): **tailwind CDN → `/static/ui.js` → ag-grid CDN → `/static/common.css`
+  → gnb.js → session.js → (dashboard·supply 만) stockmenu.js.** ui.js 가 tailwind.config 를 세팅하므로
+  tailwind 다음에 와야 한다.
+- **색은 CSS 변수를 가리키는 Tailwind 토큰**(`bg-s0/s1/s2`, `border-line`, `text-txt/txt2/txt3`,
+  `text-up/down/good/warn/bad/accent`)이라 라이트/다크가 클래스 교체 없이 따라온다. 그래서 `dark:` 변형은
+  쓰지 않는다. **CSS 변수 색이라 투명도 수식(`bg-good/12`)은 못 쓴다** — 옅은 배경은 `.tint-*` 유틸.
+- 목록은 `Grid.create(el, {columns, rows, onRow, options})` 로 만든다. 컨테이너에 높이를 주고
+  (`h-[min(60vh,560px)]`), 폴링 갱신은 `setGridOption("rowData", …)`, 탭 전환으로 목록이 사라지면
+  `destroy()` (매 주기 새로 만들지 말 것). 선택 행 강조는 `rowClassRules`+`redrawRows()`.
+  종목코드·종목명 셀은 `StockMenu.link` cellRenderer, 행 클릭은 `StockMenu.fromEvent` 가 true 면 상세 열기를 건너뛴다.
+  헤더 설명은 `headerTooltip`. **cellRenderer 가 참조하는 헬퍼 함수는 반드시 `<script>` 스코프에 정의**할 것
+  (전환 중 `scoreCell`·`scoreBar`·`gradeBadge` 가 유실돼 그리드가 빈 셀로 나온 적 있다 — 회귀 주의).
+- 세 화면은 `/static/common.css`(테마 토큰) + `/static/ui.js`(Tailwind·그리드) + `/static/gnb.js`(GNB·테마 토글)
+  + `/static/session.js`(API 키·설정 모달) + `/static/stockmenu.js`(종목 메뉴) 를 공유한다. `web.py` 가 `/static` 을 mount 한다.
+- 테마 토글과 ⚙설정 버튼은 **GNB 로 옮겼다.** 페이지는 `<div data-gnb="supply|screener|bollinger">` 자리표시자와
   `[data-gnb-action]` 버튼만 두면 `gnb.js` 가 GNB 를 그리고 버튼을 오른쪽으로 옮긴다.
 - 테마가 바뀌면 `themechange` 이벤트가 뜬다 — 인라인 SVG 차트는 이걸 듣고 다시 그린다.
 - 설정 저장·해제 후에는 `sessionchange` 이벤트가 뜬다.
@@ -200,7 +318,9 @@
 - `python main.py web --port 8083` / 컨테이너는 compose `web` 서비스 (8083:8083).
 - `ScanService` 가 `interval` 초마다 스캔해 결과를 메모리에 보관하고, 브라우저는 `/api/state` 를 5초마다 폴링한다.
   `scan_once()` 는 논블로킹 락으로 중복 실행을 막는다(진행 중이면 현재 상태 반환, `POST /api/scan` 은 409).
-- 프런트엔드는 **외부 CDN·프레임워크를 쓰지 않는다**(폐쇄망/컨테이너 고려). 차트도 인라인 SVG 직접 생성.
+- 프런트엔드는 **Tailwind CSS(Play CDN) + AG Grid(CDN, 33.3.2)** 를 쓴다 (2026-09-18 도입).
+  종목 목록은 전부 AG Grid, 화면 스타일은 전부 Tailwind 유틸리티. 차트는 여전히 인라인 SVG 직접 생성.
+  **외부 CDN 이 필요하다** — 폐쇄망에 올리려면 `ui.js` 위 두 CDN 을 자체 호스팅으로 바꿔야 한다.
 - 색상: 상승/양봉 `--up`(적색), 하락/음봉 `--down`(청색) — 한국 시장 관례. 라이트/다크 각각
   `#e34948/#2a78d6`, `#e66767/#3987e5` 로 CVD·대비 검증 통과(all-pairs). 기준봉은 `--warning` 띠로 강조.
 - 라이트/다크 모두 지원: `:root` 기본 + `prefers-color-scheme` + `[data-theme]` 토글(localStorage 저장),
@@ -211,7 +331,9 @@
   시그널·차트·스캔 API 는 이때 503 이다.
 - 모든 데이터 API 는 요청 쿠키로 세션을 먼저 찾고(`_service(request)` / `_bot(request)`),
   없으면 서버 기본 스캐너·봇을 쓴다. 새 API 를 추가할 때 전역 `service`/`bollinger` 를 직접 참조하지 말 것.
-- 볼린저 API: `GET /api/bollinger/state` · `POST /api/bollinger/{config,live,start,stop,run}` ·
+- 수급 API: `GET /api/supply/state` · `POST /api/supply/scan` · `GET /api/supply/chart/{symbol}`
+  (`_supply(request)` 로 세션 > 서버 순). 서버에 수급 서비스가 없으면 state 는 `configured:false`, 나머지는 503.
+- 볼린저 API: `GET /api/bollinger/state` · `POST /api/bollinger/{config,symbols,live,start,stop,run}` ·
   `GET /api/bollinger/chart/{symbol}`. 봇은 세션마다 하나씩 만들되 **자동 시작하지 않는다**
   (주문을 내는 루프라 사용자가 명시적으로 시작해야 한다).
 
@@ -337,10 +459,107 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 - 계좌 컨텍스트 API 는 `X-Tossinvest-Account: {accountSeq}` 헤더 필수 (`TossClient._headers`).
 - 모든 주문 이벤트는 `out/orders.jsonl` 에 적재. OCO 실패는 `oco_failed` 로 남으므로 운영 시 감시할 것.
 
-## 종목 링크
+## 종목 링크 · 종목 메뉴
 - 토스증권 종목 페이지: `https://www.tossinvest.com/stocks/{6자리코드}` (주문 화면은 `/order` 접미사).
-  표의 종목코드·종목명과 상세 패널의 "토스증권에서 열기" 버튼이 새 창으로 연다.
-  행 클릭(상세 열기)과 겹치지 않게 링크에 `event.stopPropagation()` 을 건다.
+- 세력추정매매 표(시그널·돌파대기)의 **종목코드·종목명을 누르면 종목 메뉴 모달**(`#stock-menu`)이 뜬다.
+  - **토스로 보기** — 위 URL 을 새 창으로 연다.
+  - **반전 매매에 종목추가** — `POST /api/bollinger/symbols {symbol}` 로 볼린저 감시 목록에 1개를 덧붙인다.
+    서버에서 합치므로 `/api/bollinger/config` 처럼 다른 설정을 덮어쓰지 않는다. 이미 있으면
+    `added:false`, 6자리 숫자가 아니면 400, 봇이 없으면(키 미설정) 503. **봇을 시작하지는 않는다.**
+- 셀은 `<button class="stock">` 이고, `bindRows` 가 클릭 대상이 이 버튼이면 메뉴만 열고
+  상세 패널은 열지 않는다. 행의 다른 칸을 누르면 기존대로 상세가 열린다.
+  상세 패널의 "토스증권에서 열기" 버튼은 그대로 직접 링크다.
+- **볼린저 설정(감시 목록 포함)은 DB 에 저장된다** (`bollinger_configs` 테이블, 아래 로그인 절 참고).
+- 종목 메뉴는 공통 모듈 `static/stockmenu.js` 다 (세력추정·수급포착 화면 공용). 페이지는
+  `StockMenu.link(r, text, cls)` 로 셀을 만들고 행 클릭에서 `StockMenu.fromEvent(ev, 코드, 이름)` 가
+  true 면 상세 열기를 건너뛴다. 스타일(`button.stock`·`.menu-list`)은 `common.css` 에 있다.
+- 공통 모달 `.modal-back` 은 `z-index: 60` 이다. GNB 가 `50`(sticky)이라 그보다 낮으면
+  모달 윗부분이 GNB 에 가려진다 (⚙설정 모달도 같은 문제가 있었다).
+
+## 수급 포착 매매 (screener/supply.py)
+화면 `/supply`, CLI `python main.py supply`. **주문을 내지 않는 관찰용**이며 **백테스트 미검증**이다
+(점수는 경험칙 배점 — 세력추정매매처럼 실측 근거가 있는 것처럼 문구를 바꾸지 말 것).
+
+### 판정 흐름
+| 단계 | 조건 (`SupplyConfig`) |
+|---|---|
+| 후보 | `rankings MARKET_TRADING_AMOUNT duration=1d` 상위 100 → `stocks` 메타로 ETF(`securityType!=STOCK`)·우선주·거래정지 제외, 거래대금 ≥ 100억, 주가 ≥ 1,000원 |
+| 1차 급증 | `min(경과분, 60)` 시점까지 오늘 누적 거래량 ÷ **과거 5영업일 같은 분까지 누적 평균** ≥ 2.0 (못 넘으면 목록에서 제외) |
+| 관찰 | 장 시작 30분 전 (`confirm_minutes`) |
+| 이탈 | 현재가 < 손절선, 또는 (최근 30분 거래량 < 직전 30분 × 0.5 AND 매수 비중 < 45%) |
+| 지속 | 매수 비중 ≥ 55% AND 누적 매수세(CVD) 상승 AND VWAP 위 AND 손절선 위 AND 거래량 유지 |
+| 약화 | 그 밖 |
+| **진입** | (별도 플래그, status 아님) **지속 AND 갭 과열 아님 AND 고점권 아님 AND 종합 점수 ≥ `entry_score_min`(70)** |
+
+- **'진입'(`decide_entry`, 들어갈 만한 것)** — status 는 그대로 두고 **별도 플래그**로 여러 지표를 종합한다:
+  수급 지속 + 갭 과열 아님 + 고점권 아님 + 종합 점수 ≥ `entry_score_min`(기본 70).
+  화면은 🔥 배지·필터·근거로 강조하고, **텔레그램은 이 진입 종목만** 보낸다. `entry_reasons` 에 근거를 담는다.
+  `_enrich` 에서 투자자(+5점) 반영 후 `rescore`→`decide_entry` 를 다시 불러 최종 판정한다. 정렬도 진입 우선.
+  **이 컷오프도 백테스트로 검증된 값이 아니다**(경험칙) — 재료·뉴스·공시는 사람이 확인한다.
+- 손절선 = 5분봉 20이평(`minute_ma`, **완성된 5분봉만** — label=right), 형성 전(대략 10:40 전)엔 VWAP.
+- '평소' 를 일평균 × 경과비율로 나누지 않는 이유: 장 초반에 거래가 몰려 선형 비례는 기대치를 과소평가해
+  배수가 부풀려진다. 과거 분봉이 2일 미만이면 그 근사로 대체하고 `급증기준="일평균 근사"` 로 표시한다.
+- 매수세는 **틱 규칙 추정**(`tick_flow`: 직전 종가 대비 상승=매수, 하락=매도, 보합=봉 방향).
+  토스 `/trades` 에는 매수/매도 구분이 없고 최근 50건뿐이라 쓰지 않는다.
+- 호가 잔량비(`orderbook_summary`)는 해석이 갈려 **점수에 넣지 않고 표시만** 한다.
+- 외국인·기관·프로그램 잠정 순매수(`investor_flow`)는 포착 종목만 조회(3 TPS), 순매수면 +5점.
+- 유의종목 차단/표시는 세력추정매매와 **같은 목록**(`StrategyConfig.blocking_warnings/notice_warnings`)을 쓴다.
+- 판정·차트 모두 `session_bars`·`continuous_bars`·`tick_flow`·`vwap`·`minute_ma` 같은 함수를 쓴다.
+
+### 토스 1분봉 시각 규칙 (2026-09-16 실측)
+- **봉 시각은 봉이 끝나는 시각**이다. 09:00~09:01 거래 → `09:01` 봉. `09:00` 이하 봉은 장전(NXT).
+- 접속매매 마지막 봉은 `15:20`, **종가 동시호가 체결은 `15:30` 또는 `15:31` 봉**에 몰린다
+  (한선엔지니어링 15:30, 삼성전자 15:31 — 종목마다 다름). 그 뒤는 시간외.
+- 그래서 수급 모듈의 정규장은 `09:00 < t ≤ 15:31`, 흐름 계산은 `t ≤ 15:20`(동시호가 제외).
+- 참고: 볼린저의 `regular_session` 은 `09:00 ≤ t ≤ 15:30` 이라 장전 `09:00` 봉이 들어가고
+  `15:31` 동시호가 봉이 빠진다. 영향은 1~2봉이지만 볼린저를 손볼 때 같이 맞출 것 (아직 미수정).
+- `before` 파라미터(`2026-09-15T10:00:59+09:00`)로 과거 특정 시각까지의 분봉을 받을 수 있다.
+
+### 데이터 · 비용
+- `TossDataLoader.session_minutes` — 정규장 봉이 있는 **가장 최근 날짜**를 찾고 그날 09:00 이전까지
+  페이지를 넘긴다(최대 6쪽). 장 마감 후·장전에는 직전 거래일이 기준일이 된다.
+- `minute_profile` — 과거 영업일 09:00~10:00 분봉을 `cache/intraday/{코드}_{날짜}_{분}.json` 에 **영구 캐시**.
+  첫 스캔은 70종목 × 5일 호출로 약 40초, 이후 약 16초 (2026-09-16 실측).
+- 일봉은 세력추정 스캐너와 같은 `ohlcv(sym, 260)` 캐시를 공유한다.
+- `SupplyService` 는 **장중 `interval`(기본 60초, `--supply-interval`), 장 밖 30분**에 한 번 돈다.
+  화면을 열었는데 결과가 없으면 `/api/supply/state` 가 즉시 1회 스캔을 띄운다.
+  텔레그램은 **장중에 새로 '진입'(`SupplySignal.entry`)이 된 종목만**, (기준일, 종목)당 1회 보낸다
+  (2026-09-18: 예전엔 '지속' 전체를 보냈으나, 갭 과열·고점권까지 걸러낸 진입 후보만 보내도록 바꿈).
+- 세션마다 수급 스레드가 1개 더 뜬다(세션 생성 시 시작, `close()` 에서 정지).
+- JSON 으로 나가는 값은 `clean()` 으로 NaN → null 처리한다 (Starlette 는 NaN 을 거부한다).
+
+### 한계 — 문서에 반드시 남길 것
+- 승률·기대값을 모른다. 뉴스·공시 확인은 사람이 해야 한다 (API 없음).
+- 틱 규칙 매수세는 추정치라 HTS 체결강도와 다르다.
+- 스캔 간격(60초) 사이의 급변은 놓친다.
+
+## 세력추정매매 자동 매수 (screener/autobuy.py)
+- ⚙설정 → 주문 칸의 **"세력추정매매 시그널 자동 매수"** 체크 + `[점수] 이상` + `[금액]원`.
+  `SessionSettings.auto_buy / auto_buy_score(기본 75) / auto_buy_amount` 로 계정 DB 에 저장된다.
+  **개인 키 세션에만** 붙는다(`ScanService.auto_buyer`). 서버 기본 스캐너에는 없다.
+- 스캔 직후 `AutoBuyer.handle(report.signals)` → 점수 ≥ 컷오프 · 오늘 날짜 시그널 · 09:00~15:20(평일)만.
+- 수량 = `min(설정 금액, 1회 주문 한도, 예수금) // 매수가(호가 내림)` — 금액 안에서 최대 수량.
+- 주문은 수동 주문과 같은 `TradingService.submit` (지정가 = 전일 고가, 체결 시 OCO 1R 익절 / 손절가).
+  **추격 매수하지 않는다** — 백테스트 진입가와 맞추기 위해. 현재가가 이미 1R 이상이면 건너뛴다.
+- 자동 주문은 `fill_timeout`=15:30 까지, `cancel_on_timeout=True` 라 **미체결 잔량을 장 마감에 취소**한다
+  (손절 없는 늦은 체결 방지). 수동 주문은 예전대로 취소하지 않는다.
+- **같은 종목은 하루 1회**(실패해도 재시도 안 함). 재시작 시 주문 로그의 `auto_buy`(실주문) 기록과
+  보유 잔고로 중복을 막는다. 모의 기록은 중복 판정에 쓰지 않는다.
+- 실주문 게이트는 기존과 동일(서버 `TOSS_TRADING_ENABLED` + `trading_opt_in`). 꺼져 있으면 모의로
+  `auto_buy` 이벤트만 남기고 텔레그램으로 알린다. 세션 info 의 `auto_buy_live` 가 실주문 여부.
+- 부수 수정: `_filled_qty` — 예전 `int(_to_float(x) or 0)` 은 NaN 이 참이라 `int(nan)` 으로 죽었다.
+- 한계: 스캔 주기(기본 300초, 운영 120초) 단위로만 판정한다. 설정의 "장중 실시간 현재가" 를 켜야
+  돌파를 장중에 잡는다. 백테스트는 일봉 종가 기준이라 장중 자동 진입의 실측 성과는 아직 없다.
+
+## 돌파 대기(watch) 목록의 의미
+- `Screener.watch_candidates` 는 STEP 1+2 만 보고 **STEP 3(돌파)는 보지 않는다.**
+  그래서 오늘 이미 시그널이 뜬 종목도 걸린다 — 예전에는 매수 시그널과 돌파대기에 같은 종목이
+  동시에 떠서 혼동됐다. 이제 `exclude` 인자로 **시그널 종목 + 유의종목 차단 종목**을 뺀다
+  (`ScanService.scan_once`, `main.py watch` 둘 다). 두 목록은 겹치지 않는다 (회귀 테스트 있음).
+- 판정 기준은 `detect` 와 같다: **마지막 봉 = 돌파 판정일**, 조정 구간은 그 전날까지.
+  따라서 `감시_돌파가(전일고가)` 는 마지막 봉의 `prev_high` 다. 예전 구현은 마지막 봉 자신의
+  `high`(=당일 고가)를 이 라벨로 내보내 시그널의 전일고가와 값이 달랐다
+  (동국S&C: 시그널 1,440 vs 대기 1,590). 응답에 `판정일` 필드를 함께 싣는다.
 
 ## 운영 메모
 - 거래대금 상위(`--top`)와 중소형주 필터(`max_market_cap=3조`)를 함께 쓰면 대형주가 대량 탈락한다
@@ -355,6 +574,43 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 - 주석·출력 문구는 한국어로 통일한다.
 
 ## 변경 이력
+- 2026-09-18: **수급포착 '진입' 판정 + 텔레그램 기준 변경** — 여러 지표(지속+갭 과열 아님+고점권 아님+
+  점수 컷오프)를 종합한 `SupplySignal.entry` 플래그 신설(`decide_entry`, `SupplyConfig.entry_score_min=70`).
+  화면에 🔥 진입 배지·필터·근거 표시, **텔레그램은 '지속' 전체 대신 '진입' 종목만** 발송. 테스트 225개 통과.
+- 2026-09-18: **UI 전면 개편** — 프런트엔드를 **Tailwind CSS(Play CDN) + AG Grid(CDN)** 로 전환.
+  세 화면(세력추정·수급·볼린저)의 모든 종목 목록을 AG Grid 로, 스타일을 Tailwind 유틸리티로 재작성.
+  `static/ui.js` 신설(tailwind.config·`UI.cls`·`Grid.create`), `common.css` 는 테마 토큰만 남김.
+  login·gnb·session·stockmenu 도 Tailwind 화. 실주문 위험 표시(빨간 버튼·경고 배너)와 확인 절차는 유지.
+  테스트 220개 통과. **외부 CDN 의존이 새로 생김**(폐쇄망 배포 시 자체 호스팅 필요).
+- 2026-09-18: **설정 창 분리** — 🔑 API 키(자격증명) / ⚙ 설정(스캔·알림·주문·자동매수),
+  `POST /api/session/settings` 추가(키 재입력 없이 저장), `from_body` 기본값 상속 수정.
+  자동매수 `_load_today` 가 주입된 clock 대신 `date.today()` 를 쓰던 문제 수정. 테스트 220개 통과.
+- 2026-09-17: **세력추정매매 자동 매수** (`screener/autobuy.py`, 설정 창 점수·금액 저장,
+  미체결 잔량 장 마감 취소, 하루 1회·보유 종목 제외). 테스트 218개 통과.
+- 2026-09-17: **다중 사용자 보완** — 관리자/일반 구분(서버 계좌 주문·봇은 관리자 전용),
+  세션 owner 결속(계정 전환 시 남의 세션 사용 차단), 회원가입(초대 코드 선택), 비밀번호 변경·탈퇴,
+  로그인 시도 제한, 사용자별 주문 로그, 봇 실행 중 세션 유휴 폐기 방지, 세션 상한 20. 테스트 209개 통과.
+- 2026-09-16: **수급포착매매 추가** (`screener/supply.py`, `/supply`, `main.py supply`,
+  `/api/supply/*`, 세션·서버별 `SupplyService`, GNB 맨 앞). 토스 클라이언트에 `candles_page`·
+  `orderbook`·`investor_trading`·`program_trades`, 로더에 `turnover_leaders`·`metas`·
+  `session_minutes`·`minute_profile`·`investor_flow`·`orderbook_summary`, `StockMeta.security_type` 추가.
+  토스 1분봉이 **종료 시각 라벨**이고 종가 동시호가가 `15:30/15:31` 봉에 온다는 것 확인.
+  종목 메뉴를 공통 `static/stockmenu.js` 로 분리. **볼린저 설정(감시 목록 포함) DB 저장**
+  (`bollinger_configs`, `manage_existing` 제외). 테스트 196개 통과.
+- 2026-09-16: **돌파대기 정리 + 종목 메뉴** — 돌파대기에서 시그널·차단 종목 제외, 감시 돌파가를
+  당일 고가 → 전일 고가(`prev_high`)로 수정, `판정일` 추가. 종목코드·종목명 클릭 시 모달
+  (토스로 보기 / 반전 매매에 종목추가), `POST /api/bollinger/symbols` 추가.
+  공통 모달 z-index 20→60 (GNB 에 가려지던 문제). 계정 `djaggi` 추가. 테스트 170개 통과.
+- 2026-09-16: 운영 정리 — `.env` 자격증명 갱신 후 **poller 서비스를 `profiles: ["manual"]` 로 내리고
+  web 단독 운영**으로 전환(토큰 상호 무효화·429 회피). `env_file` 은 컨테이너 생성 시점에만
+  주입된다는 사실 확인(`restart` 로는 새 키가 안 먹는다). 저장된 사용자 설정(`cache/app.db`)의
+  옛 키는 로그인 후 ⚙설정에서 다시 넣어야 세션 복구가 된다.
+  web 커맨드에 `--live` 를 켜고 스캔 주기를 300→120초로 줄여 poller 의 실시간 감시 역할을 흡수.
+- 2026-09-14: **로그인 + 설정 서버 저장** 추가 (`screener/store.py` SQLite, scrypt 비밀번호,
+  Fernet 설정 암호화, `require_login` 미들웨어, `/login` 화면, `adduser` CLI,
+  로그인 시 저장된 설정으로 세션 자동 복구). 테스트 159개 통과.
+- 2026-09-14: 설정 창에 **텔레그램 테스트 전송** 추가 (`TelegramNotifier.check`,
+  `POST /api/session/telegram/test`, 토큰/챗ID 형식 검증 + 오류 한국어 안내). 테스트 147개 통과.
 - 2026-09-08: **볼린저 밴드 반전 매매 자동매매 추가** — `bollinger.py`·`bollinger_bot.py`,
   화면 `/bollinger`, 시장가 매수·매도(`TradingService.market_order`), 3중 실주문 게이트,
   `manage_existing` 안전장치, 정규장 봉 필터. 공통 GNB(**왔니 주식**)·테마·설정 모달을

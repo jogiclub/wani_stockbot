@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>수급 포착 매매 · 왔니 주식</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/static/ui.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+<link rel="stylesheet" href="/static/common.css">
+<script src="/static/gnb.js"></script>
+<script src="/static/session.js"></script>
+<script src="/static/stockmenu.js"></script>
+</head>
+<body class="font-sans text-sm leading-normal antialiased">
+<div data-gnb="supply"></div>
+
+<!-- GNB 우측으로 옮겨질 공통 컨트롤 (gnb.js 가 이동시킨다) -->
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
+             bg-s2 text-txt2 border border-line" id="status" data-gnb-action>
+  <span class="w-[7px] h-[7px] rounded-full bg-txt3" id="status-dot"></span>
+  <span id="status-text">연결 중…</span></span>
+<button data-settings-btn title="내 토스 API 키 설정" data-gnb-action hidden>⚙ 설정</button>
+
+<div class="max-w-page mx-auto px-5 pt-5 pb-14">
+  <div class="flex flex-wrap gap-3 items-center mb-4">
+    <h1 class="m-0 text-[19px] font-semibold tracking-tight">수급 포착 매매
+      <span class="text-txt3 font-normal text-[13px] ml-2" id="mode-label"></span></h1>
+    <div class="flex-1"></div>
+    <button class="font-sans text-sm rounded-lg border border-transparent bg-accent text-white font-semibold px-3.5 py-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" id="scan-btn">지금 스캔</button>
+  </div>
+
+  <div id="setup" hidden></div>
+  <div id="err" class="tint-bad border border-bad px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
+  <div id="closed" class="bg-s1 border border-line px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px] text-txt2" hidden></div>
+  <div id="blocked" class="tint-warn border border-warn px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
+
+  <section class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5 mb-4" aria-label="요약">
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1 flex items-center gap-1.5"><span id="l-hold"></span>진입 후보</div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-hold">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1 flex items-center gap-1.5"><span id="l-watch"></span>1차 포착</div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-watch">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1 flex items-center gap-1.5"><span id="l-weak"></span></div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-weak">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1 flex items-center gap-1.5"><span id="l-exit"></span></div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-exit">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1">판정 후보</div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-scanned">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1">마지막 스캔</div>
+      <div class="text-[17px] font-semibold tabular-nums" id="t-last">–</div></div>
+  </section>
+
+  <div class="flex gap-1 border-b border-line mb-3.5 flex-wrap" role="tablist">
+    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="list" aria-selected="true">포착 종목<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-list">0</span></button>
+    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="guide" aria-selected="false">가이드 · 기준</button>
+  </div>
+
+  <div id="view"></div>
+  <div id="detail"></div>
+
+  <footer class="mt-6 text-xs text-txt3 text-center">투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 백테스트로 검증되지 않은 전략입니다 · 데이터: 토스증권 OpenAPI</footer>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const fmt = (n, d = 0) => n == null || Number.isNaN(n) ? "–" :
+  Number(n).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+  c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const signed = (n, d = 1) => n == null ? "–" : (n > 0 ? "+" : "") + fmt(n, d);
+const eok = (won) => won == null ? "–" : fmt(won / 1e8) + "억";
+const pctOf = (a, b) => (a == null || b == null || !b) ? null : (a / b - 1) * 100;
+
+const STATUSES = ["지속", "관찰", "약화", "이탈"];
+/* 손절선까지 거리. 이미 아래면 '이탈' 로 적는다 (음수 부호가 겹쳐 보이지 않게). */
+const stopGap = (r) => r["손절폭%"] == null ? "–"
+  : r["손절폭%"] >= 0 ? `여유 ${fmt(r["손절폭%"], 1)}%` : `${fmt(-r["손절폭%"], 1)}% 아래`;
+const URLQ = new URLSearchParams(location.search);
+let STATE = null, TAB = URLQ.get("tab") === "guide" ? "guide" : "list",
+    FILTER = "전체", SELECTED = null, CHART = null, LAST_SCAN = null;
+
+/* 상태 뱃지 — 색만으로 구분하지 않도록 글자를 함께 쓴다 */
+const ST_BASE = "inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border";
+const ST_TONE = {
+  "지속": "tint-good border-good", "관찰": "tint-accent border-accent",
+  "약화": "tint-warn border-warn", "이탈": "tint-bad border-bad",
+};
+const stBadge = (s) => `<span class="${ST_BASE} ${ST_TONE[s] || "bg-s2 border-line"}">${esc(s)}</span>`;
+/* '진입'(들어갈 만한 것) — 여러 지표를 종합해 통과한 종목. 눈에 띄게 채운 배지로 강조한다. */
+const ENTER_BADGE = `<span class="${ST_BASE} bg-good border-good !text-white">🔥 진입</span>`;
+/* 셀 안의 보조 값(작은 두 번째 줄) */
+const SUB = "block text-[11px] text-txt3 font-normal";
+/* 점수 막대 */
+const bar = (pct) => `<div class="h-[5px] rounded-[3px] bg-s2 overflow-hidden min-w-[64px] mt-[3px]">
+  <i class="block h-full bg-accent" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>`;
+const EMPTY = (text) => `<div class="py-12 px-5 text-center text-txt3 leading-[1.7]">${text}</div>`;
+
+document.addEventListener("themechange", () => { if (SELECTED && CHART) drawCharts(CHART, SELECTED); });
+let RESIZE_T = null, LAST_W = window.innerWidth;
+window.addEventListener("resize", () => {
+  if (window.innerWidth === LAST_W) return;       // 모바일 주소창 높이 변화는 무시
+  LAST_W = window.innerWidth;
+  clearTimeout(RESIZE_T);
+  RESIZE_T = setTimeout(() => { if (SELECTED && CHART) drawCharts(CHART, SELECTED); }, 150);
+});
+
+/* ------------------------------------------------------------------ 데이터 */
+async function refresh() {
+  try {
+    const r = await fetch("/api/supply/state");
+    STATE = await r.json();
+    paint();
+  } catch (e) {
+    setStatus("err", "서버 연결 끊김");
+  }
+}
+
+const DOT = { live: "bg-good dot-live", busy: "bg-warn dot-busy", err: "bg-bad",
+              warn: "bg-warn", "": "bg-txt3" };
+function setStatus(kind, text) {
+  $("#status-dot").className = `w-[7px] h-[7px] rounded-full ${DOT[kind] || DOT[""]}`;
+  $("#status-text").textContent = text;
+}
+
+/* 요약 타일 라벨의 상태 뱃지는 한 번만 그린다 */
+["hold", "watch", "weak", "exit"].forEach((k, i) => {
+  $("#l-" + k).innerHTML = stBadge(STATUSES[i]);   // 지속 · 관찰 · 약화 · 이탈 순
+});
+
+function paint() {
+  const s = STATE;
+  $("#err").hidden = !s.error;
+  if (s.error) $("#err").textContent = "스캔 오류: " + s.error;
+  if (s.configured === false) {
+    setStatus("err", "API 키 필요");
+    $("#mode-label").textContent = "";
+    ["#t-hold", "#t-watch", "#t-weak", "#t-exit", "#t-scanned", "#t-last"].forEach(id => $(id).textContent = "–");
+    $("#c-list").textContent = "0";
+    $("#closed").hidden = true;
+    if (TAB === "list") {
+      dropGrid();
+      VIEW_KIND = null;
+      $("#view").innerHTML = `<div class="bg-s1 border border-line rounded-xl">${
+        EMPTY("토스증권 API 키를 등록하면 수급 스캔이 시작됩니다.")}</div>`;
+    } else renderGuide();
+    $("#detail").innerHTML = "";
+    return;
+  }
+  const busy = s.running && !s.finished_at;
+  setStatus(s.running ? "busy" : s.error ? "err" : s.market_open ? "live" : "warn",
+            s.running ? "스캔 중…" : s.error ? "오류" : s.market_open ? "장중 감시" : "장 마감");
+  const c = s.config || {};
+  $("#mode-label").textContent =
+    `거래대금 상위 ${c.candidates}종목 · 장중 ${s.interval}초 주기` + (s.session ? ` · 기준일 ${s.session}` : "");
+  const count = st => s.signals.filter(x => x["상태"] === st).length;
+  const entered = s.signals.filter(x => x["진입"]).length;
+  $("#t-hold").innerHTML = fmt(entered) + `<small class="text-[13px] font-medium text-txt3 ml-[3px]">종목</small>`;
+  $("#t-watch").innerHTML = fmt(count("관찰")) + `<small class="text-[13px] font-medium text-txt3 ml-[3px]">종목</small>`;
+  $("#t-weak").innerHTML = fmt(count("약화")) + `<small class="text-[13px] font-medium text-txt3 ml-[3px]">종목</small>`;
+  $("#t-exit").innerHTML = fmt(count("이탈")) + `<small class="text-[13px] font-medium text-txt3 ml-[3px]">종목</small>`;
+  $("#t-scanned").innerHTML = fmt(s.scanned) + `<small class="text-[13px] font-medium text-txt3 ml-[3px]">종목</small>`;
+  $("#t-last").textContent = s.finished_at ? s.finished_at.slice(11) : (busy ? "첫 스캔 중…" : "–");
+  $("#c-list").textContent = s.signals.length;
+  $("#scan-btn").disabled = s.running;
+
+  $("#closed").hidden = s.market_open || !s.session;
+  if (!s.market_open && s.session) {
+    $("#closed").innerHTML = `<b>장 마감 중</b> — ${esc(s.session)} 정규장 마지막 상태를 보여줍니다.
+      장 밖에서는 ${Math.round((s.idle_interval || 1800) / 60)}분에 한 번만 다시 확인하며 알림은 보내지 않습니다.`;
+  }
+  const blocked = s.blocked || [];
+  $("#blocked").hidden = !blocked.length;
+  if (blocked.length) {
+    $("#blocked").innerHTML = `<b>⚠ 매수 유의 종목 ${blocked.length}건 제외</b> ` +
+      blocked.map(b => `${esc(b["종목명"])}(${esc(b["종목코드"])}) — ${esc(b["사유"])}`).join(" · ");
+  }
+
+  const rescanned = s.finished_at !== LAST_SCAN;
+  LAST_SCAN = s.finished_at;
+  renderTab();
+  if (SELECTED && rescanned) {                        // 새 스캔 결과로 상세·차트를 갱신
+    const now = s.signals.find(x => x["종목코드"] === SELECTED["종목코드"]);
+    if (now) select(now, true);
+  }
+  if (!SELECTED && s.signals.length && TAB === "list") select(s.signals[0]);
+}
+
+/* ------------------------------------------------------------------ 탭 */
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.setAttribute("aria-selected", String(btn.dataset.tab === TAB));
+  btn.onclick = () => {
+    TAB = btn.dataset.tab;
+    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+    $("#detail").hidden = TAB !== "list";
+    renderTab();
+  };
+});
+
+function renderTab() {
+  if (!STATE) return;
+  if (TAB === "guide") renderGuide(); else renderList();
+}
+
+const TIPS = {
+  "상태": "🔥진입=여러 지표를 종합해 들어갈 만한 것(텔레그램 발송) · 지속=수급 연속성 확인 · 관찰=장 시작 30분 전 1차 포착 · 약화=조건 일부 미달 · 이탈=손절선 이탈 또는 거래량 감소+매도 우위",
+  "점수": "경험칙 배점 100점. 백테스트로 검증되지 않았습니다",
+  "급증": "평소(과거 영업일 같은 시각까지) 누적 거래량 대비 오늘 누적 거래량. 10:00 이후엔 10:00 기준값",
+  "거래대금": "당일 누적 거래대금 (시장 전체 기준)",
+  "매수비중": "최근 30분 거래량 중 매수로 추정되는 비중 (1분봉 틱 규칙 추정치)",
+  "VWAP 대비": "현재가가 당일 거래량가중평균가(VWAP)보다 얼마나 위/아래인지",
+  "손절가": "5분봉 20이평 (형성 전에는 VWAP). 괄호는 현재가 대비 거리",
+  "가격위치": "120일 가격 범위에서의 위치. 35% 이하 바닥권, 120일 고점의 95% 이상은 고점권",
+};
+
+/* ------------------------------------------------- 포착 종목 목록 (AG Grid) */
+let GRID = null, VIEW_KIND = null;
+
+function dropGrid() { if (GRID) { GRID.destroy(); GRID = null; } }
+
+/** 그리드를 담을 상자. 목록이 비었다가 다시 생기면 새로 만든다. */
+function gridHost() {
+  dropGrid();
+  $("#list-body").innerHTML = `<div id="grid" class="grid-clickable w-full h-[min(60vh,560px)]"></div>`;
+  return $("#grid");
+}
+
+/* 선택된 행을 표시한다 (상세 패널과 짝) */
+const ROW_CLASS = { "!bg-s2": (p) => !!SELECTED && p.data && SELECTED["종목코드"] === p.data["종목코드"] };
+
+/* 상태 필터 칩 — 개수가 스캔마다 바뀌므로 매번 다시 그린다. */
+const CHIP = "px-2.5 py-1 text-[12.5px] rounded-full border border-line bg-s1 text-txt " +
+             "hover:bg-s2 aria-pressed:bg-txt aria-pressed:text-s1 aria-pressed:border-transparent";
+function renderChips(all) {
+  const cnt = (f) => f === "전체" ? all.length
+    : f === "진입" ? all.filter(r => r["진입"]).length
+    : all.filter(r => r["상태"] === f).length;
+  $("#filters").innerHTML = ["전체", "진입", ...STATUSES].map(f => {
+    const on = f === "진입" && f !== FILTER ? "!border-good !text-good" : "";
+    return `<button class="${CHIP} ${on}" data-f="${f}" aria-pressed="${f === FILTER}">${f} ${cnt(f)}</button>`;
+  }).join("");
+  $("#filters").querySelectorAll("button").forEach(b =>
+    b.onclick = () => { FILTER = b.dataset.f; renderList(); });
+}
+
+function listColumns() {
+  const c = STATE.config || {};
+  const upDown = (v) => v >= 0 ? "text-up font-semibold" : "text-down font-semibold";
+  return [
+    { field: "상태", headerTooltip: TIPS["상태"], minWidth: 116,
+      // 진입 종목은 정렬상 맨 위로 온다. 진입이면 🔥 배지, 아래 작은 글씨에 원래 상태를 남긴다.
+      comparator: (a, b, na, nb) => (nb.data["진입"] - na.data["진입"]) || 0,
+      cellRenderer: (p) => `<div class="leading-tight">${p.data["진입"] ? ENTER_BADGE : stBadge(p.value)}
+        <span class="${SUB}">${p.data["진입"] ? esc(p.value) + " · " : ""}${esc(p.data["판정시각"])}</span></div>` },
+    { field: "점수", headerTooltip: TIPS["점수"], minWidth: 104,
+      cellRenderer: (p) => `<div class="leading-tight">
+        <b class="text-base font-bold tabular-nums">${p.value}</b>${bar(p.value)}</div>` },
+    { field: "종목코드", minWidth: 110,
+      cellRenderer: (p) => StockMenu.link(p.data, p.value, "font-semibold") },
+    { field: "종목명", minWidth: 150, cellRenderer: (p) =>
+        StockMenu.link(p.data, p.value) + (p.data["유의사항"] || []).map(t =>
+          `<span class="ml-1.5 px-1.5 py-px rounded-full text-[11px] font-semibold tint-warn"
+                 title="${esc(t)}">${esc(t.split(" — ")[0])}</span>`).join("") },
+    { field: "현재가", type: "numericColumn", minWidth: 96,
+      valueFormatter: (p) => fmt(p.value) },
+    { field: "등락률%", headerName: "등락률", type: "numericColumn", minWidth: 96,
+      cellClass: (p) => "tabular-nums " + upDown(p.value),
+      valueFormatter: (p) => signed(p.value) + "%" },
+    { field: "급증배수", headerName: "급증", headerTooltip: TIPS["급증"],
+      type: "numericColumn", minWidth: 110,
+      cellRenderer: (p) => `<div class="leading-tight"><b>${fmt(p.value * 100)}%</b>
+        <span class="${SUB}">${esc(p.data["급증시각"])} 기준</span></div>` },
+    { field: "거래대금", headerTooltip: TIPS["거래대금"], type: "numericColumn", minWidth: 104,
+      valueFormatter: (p) => eok(p.value) },
+    { field: "매수비중%", headerName: "매수비중", headerTooltip: TIPS["매수비중"],
+      type: "numericColumn", minWidth: 104,
+      cellClass: (p) => "tabular-nums " + upDown(p.value - (c.buy_ratio_min || 0) * 100),
+      valueFormatter: (p) => fmt(p.value, 1) + "%" },
+    { colId: "vwap", headerName: "VWAP 대비", headerTooltip: TIPS["VWAP 대비"],
+      type: "numericColumn", minWidth: 110,
+      valueGetter: (p) => pctOf(p.data["현재가"], p.data["VWAP"]),
+      cellClass: (p) => "tabular-nums " + upDown(p.value),
+      valueFormatter: (p) => signed(p.value) + "%" },
+    { field: "손절가", headerTooltip: TIPS["손절가"], type: "numericColumn", minWidth: 106,
+      cellRenderer: (p) => `<div class="leading-tight">${fmt(p.value)}
+        <span class="${SUB}">${stopGap(p.data)}</span></div>` },
+    { field: "가격위치%", headerName: "가격위치", headerTooltip: TIPS["가격위치"],
+      type: "numericColumn", minWidth: 100, valueFormatter: (p) => fmt(p.value) + "%" },
+  ];
+}
+
+function renderList() {
+  const all = STATE.signals;
+  const rows = FILTER === "전체" ? all
+    : FILTER === "진입" ? all.filter(r => r["진입"])
+    : all.filter(r => r["상태"] === FILTER);
+  if (VIEW_KIND !== "list") {              // 가이드 탭에서 돌아오면 껍데기를 다시 만든다
+    dropGrid();
+    VIEW_KIND = "list";
+    $("#view").innerHTML =
+      `<div id="filters" class="flex flex-wrap gap-1.5 mb-2.5" role="group" aria-label="상태 필터"></div>
+       <div id="list-body"></div>`;
+  }
+  renderChips(all);
+  if (!rows.length) {
+    dropGrid();
+    const empty = STATE.finished_at
+      ? `포착된 종목이 없습니다.<br><span class="text-txt3">장 초반(09:00~10:00) 평소보다 거래량이 ${fmt(STATE.config.surge_min * 100)}% 이상 몰린 종목만 표시됩니다.</span>`
+      : "첫 스캔 중입니다… (과거 분봉을 처음 모을 때는 수십 초 걸립니다)";
+    $("#list-body").innerHTML = `<div class="bg-s1 border border-line rounded-xl">${EMPTY(empty)}</div>`;
+    return;
+  }
+  if (!GRID) {
+    GRID = Grid.create(gridHost(), {
+      rows, rowHeight: 54, options: { rowClassRules: ROW_CLASS },
+      columns: listColumns(),
+      onRow: (data, ev) => {
+        if (!StockMenu.fromEvent(ev, data["종목코드"], data["종목명"])) select(data);
+      },
+    });
+  } else {
+    GRID.setGridOption("rowData", rows);
+  }
+}
+
+/* 선택이 바뀌면 강조 행만 다시 그린다 */
+function repaintRows() { if (GRID) GRID.redrawRows(); }
+
+/* ------------------------------------------------------------------ 상세 */
+async function select(r, quiet = false) {
+  const changed = !SELECTED || SELECTED["종목코드"] !== r["종목코드"];
+  SELECTED = r;
+  if (TAB === "list" && !quiet) repaintRows();
+  renderDetail(r);
+  if (changed) CHART = null;
+  try {
+    const res = await fetch(`/api/supply/chart/${encodeURIComponent(r["종목코드"])}`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || res.status);
+    if (SELECTED["종목코드"] !== r["종목코드"]) return;
+    CHART = data;
+    drawCharts(data, SELECTED);
+  } catch (e) {
+    const box = $("#charts");
+    if (box) box.innerHTML = EMPTY(`차트를 불러오지 못했습니다: ${esc(e.message)}`);
+  }
+}
+
+/* 체크 항목 앞의 ✓/✕/? 표식 — 폭을 고정해 글머리가 어긋나지 않게 한다 */
+const MARK = "w-[1.2em] flex-none text-center";
+const mark = v => v === true ? `<b class="${MARK} text-good" aria-label="충족">✓</b>`
+  : v === false ? `<b class="${MARK} text-bad" aria-label="미충족">✕</b>`
+  : `<b class="${MARK} text-txt3" aria-label="확인 필요">?</b>`;
+
+/* 점수 구성 · 투자자 표의 칸 스타일 (520px 이하에서는 설명 칸을 접는다) */
+const BD = {
+  t: "w-full mt-1",
+  c1: "py-1 pr-2 align-top text-txt2 w-[140px] max-[520px]:w-auto",
+  c2: "py-1 pr-2 align-top w-20 max-[520px]:w-12",
+  c3: "py-1 pr-3.5 align-top font-semibold w-[72px] text-right whitespace-nowrap",
+  c4: "py-1 pr-2 align-top text-txt3 text-xs max-[520px]:hidden",
+};
+
+function renderDetail(r) {
+  const k = r["체크"] || {}, c = STATE.config || {}, inv = r["투자자"] || {}, ob = r["호가"] || {};
+  const confirmed = r["상태"] !== "관찰";
+  const item = (ok, text) => `<li class="flex gap-1.5 mb-1 text-txt2">${mark(ok)}<span>${text}</span></li>`;
+  const vw = pctOf(r["현재가"], r["VWAP"]);
+  const invRow = (label, v) => `<tr><td class="${BD.c1}">${label}</td>
+    <td class="${BD.c2} ${v > 0 ? "text-up font-semibold" : v < 0 ? "text-down font-semibold" : ""}">${
+      v == null ? "–" : signed(v, 0) + "주"}</td></tr>`;
+  const CARD = "bg-s2 rounded-[10px] px-3.5 py-3";
+  const CARD_N = "text-[11px] font-bold text-accent tracking-[.05em]";
+  const CARD_H = "mt-0.5 mb-2 text-sm font-semibold";
+  const CARD_UL = "list-none m-0 p-0 text-[12.5px]";
+  const H3 = "text-[13px] m-0 mb-1.5 text-txt2 font-semibold";
+  $("#detail").hidden = TAB !== "list";
+  $("#detail").innerHTML = `<section class="mt-3.5 bg-s1 border border-line rounded-xl p-4"
+      aria-label="${esc(r["종목명"])} 상세">
+    <div class="flex flex-wrap items-center gap-2.5">
+      <h2 class="m-0 text-[17px] font-semibold">${esc(r["종목명"])}
+        <span class="text-txt3 font-normal tabular-nums">${esc(r["종목코드"])}</span></h2>
+      ${r["진입"] ? ENTER_BADGE : ""}${stBadge(r["상태"])}
+      <span class="text-txt3 text-xs">${esc(r["기준일"])} ${esc(r["판정시각"])} 기준 · ${r["점수"]}점</span>
+      <div class="flex-1"></div>
+      <a class="text-xs px-2.5 py-1 rounded-lg border border-line bg-s2 text-txt2 no-underline
+                hover:border-accent hover:text-accent"
+         href="${StockMenu.tossUrl(r["종목코드"])}" target="_blank" rel="noopener noreferrer">토스에서 뉴스·공시 확인 ↗</a>
+    </div>
+
+    <div class="${r["진입"] ? "tint-good border-good" : "bg-s2 border-line"} border rounded-[10px] px-3.5 py-2.5 mt-3.5 text-[13px]">
+      <b>${r["진입"] ? "🔥 진입 적합 — 여러 지표를 통과했습니다" : "진입 조건 미충족 — 표시만"}</b>
+      <span class="text-txt3"> (재료·뉴스·공시는 사람이 직접 확인)</span>
+      <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">${(r["진입근거"] || []).map(e =>
+        `<span class="inline-flex items-center gap-1">${mark(e["충족"])}<span class="${e["충족"] ? "" : "text-txt3"}">${esc(e["항목"])}</span></span>`).join("")}</div>
+    </div>
+
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2.5 my-3.5">
+      <div class="${CARD}"><div class="${CARD_N}">STEP 1 · 09:00~10:00</div>
+        <h4 class="${CARD_H}">거래량 급증 포착</h4><ul class="${CARD_UL}">
+        ${item(true, `평소 대비 <b class="font-semibold">${fmt(r["급증배수"] * 100)}%</b> (${esc(r["급증시각"])}, ${esc(r["급증기준"])})`)}
+        ${item(k["거래대금"], `거래대금 ${eok(r["거래대금"])} (하한 ${eok(c.min_turnover)})`)}
+        ${item(null, `당일 누적은 20일 평균 일거래량의 ${fmt(r["일평균대비"] * 100)}%`)}
+      </ul></div>
+      <div class="${CARD}"><div class="${CARD_N}">STEP 2 · 사람이 확인</div>
+        <h4 class="${CARD_H}">재료 검증</h4><ul class="${CARD_UL}">
+        ${item(null, "뉴스·공시는 API 로 확인할 수 없습니다 — 토스에서 직접 확인")}
+        ${item(k["갭과열아님"], `시가 갭 ${signed(r["시가갭%"])}% ${k["갭과열아님"] ? "" : "— 단발성 호재 후 음봉 전환 주의"}`)}
+        ${item(inv["외국인+기관"] == null ? null : inv["외국인+기관"] > 0,
+               `외국인·기관 잠정 순매수 ${inv["외국인+기관"] == null ? "정보 없음" : signed(inv["외국인+기관"], 0) + "주"}`)}
+      </ul></div>
+      <div class="${CARD}"><div class="${CARD_N}">STEP 3 · 최근 ${c.flow_window}분</div>
+        <h4 class="${CARD_H}">수급 연속성 ${confirmed ? "" : "(장 시작 30분 후 판정)"}</h4><ul class="${CARD_UL}">
+        ${item(confirmed ? k["매수우위"] : null, `매수 추정 비중 ${fmt(r["매수비중%"], 1)}% (기준 ${fmt(c.buy_ratio_min * 100)}%)`)}
+        ${item(confirmed ? k["누적매수상승"] : null, `누적 매수세 ${k["누적매수상승"] ? "우상향" : "꺾임"} (${signed(r["누적매수세"], 0)}주)`)}
+        ${item(confirmed ? k["거래량유지"] : null, `거래량 추세 ${r["거래량추세"] == null ? "–" : fmt(r["거래량추세"] * 100) + "%"} (직전 ${c.flow_window}분 대비)`)}
+        ${item(k["VWAP위"], `VWAP ${fmt(r["VWAP"])} ${vw == null ? "" : `(${signed(vw)}%)`}`)}
+      </ul></div>
+      <div class="${CARD}"><div class="${CARD_N}">위치 · 대응</div>
+        <h4 class="${CARD_H}">차트 위치와 손절</h4><ul class="${CARD_UL}">
+        ${item(k["고점권아님"], `120일 고점 대비 ${fmt(r["고점대비%"], 1)}% ${k["고점권아님"] ? "" : "— 설거지 주의"}`)}
+        ${item(k["바닥권"], `120일 범위 위치 ${fmt(r["가격위치%"])}% (바닥권 ≤ ${fmt(c.bottom_position * 100)}%)`)}
+        ${item(k["손절선위"], `손절선 ${fmt(r["손절가"])} (${r["5분이평"] == null ? "VWAP" : "5분봉 20이평"}) · ${stopGap(r)}`)}
+      </ul></div>
+    </div>
+
+    ${(r["유의사항"] || []).length
+      ? `<div class="tint-warn border border-warn px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]">${
+          r["유의사항"].map(esc).join(" · ")}</div>`
+      : ""}
+
+    <div id="charts" class="grid gap-3.5 mt-3.5">${EMPTY("차트 불러오는 중…")}</div>
+
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4 mt-3">
+      <div>
+        <h3 class="${H3}">점수 구성 <span class="text-txt3 font-normal">(경험칙 · 미검증)</span></h3>
+        <table class="${BD.t}"><tbody>${(r["점수상세"] || []).map(d => `<tr>
+          <td class="${BD.c1}">${esc(d["요인"])}</td>
+          <td class="${BD.c2}">${d["만점"] ? bar(Math.max(0, d["점수"]) / d["만점"] * 100) : ""}</td>
+          <td class="${BD.c3}">${d["점수"] > 0 && !d["만점"] ? "+" : ""}${d["점수"]}${d["만점"] ? " / " + d["만점"] : ""}</td>
+          <td class="${BD.c4}">${esc(d["설명"])}</td></tr>`).join("")}</tbody></table>
+      </div>
+      <div>
+        <h3 class="${H3}">투자자 · 호가 <span class="text-txt3 font-normal">${
+          inv["갱신"] ? "(잠정치 " + esc(String(inv["갱신"]).slice(11, 16)) + ")" : ""}</span></h3>
+        <table class="${BD.t}"><tbody>
+          ${invRow("외국인 순매수", inv["외국인"])}
+          ${invRow("기관 순매수", inv["기관"])}
+          ${invRow("프로그램 순매수", inv["프로그램"])}
+          <tr><td class="${BD.c1}">호가 잔량 (매수/매도)</td>
+              <td class="${BD.c2}">${ob["매수/매도"] == null ? "–" : fmt(ob["매수/매도"], 2) + "배"}</td>
+              <td class="${BD.c3}"></td>
+              <td class="${BD.c4}">${ob["매수잔량"] == null ? "" : `매수 ${fmt(ob["매수잔량"])} · 매도 ${fmt(ob["매도잔량"])} — 해석이 갈려 점수에 넣지 않습니다`}</td></tr>
+        </tbody></table>
+      </div>
+    </div>
+  </section>`;
+  if (CHART && CHART.symbol === r["종목코드"]) drawCharts(CHART, r);
+}
+
+/* ------------------------------------------------------------------ 차트 */
+/* 차트는 실제 표시 폭을 좌표계로 쓴다 — viewBox 를 크게 잡고 줄이면 글자가 작아진다. */
+const widthOf = (el) => Math.max(300, Math.round(el.clientWidth || 600));
+
+/* 툴팁 · 범례 표현 (예전 .tooltip / .legend 규칙을 유틸리티로 옮긴 것) */
+const TIP_CLS = "absolute pointer-events-none opacity-0 transition-opacity duration-100 " +
+  "bg-s2 border border-line rounded-lg px-2.5 py-2 text-xs leading-relaxed whitespace-nowrap " +
+  "shadow-lg tabular-nums z-[5] [&_b]:block [&_b]:mb-0.5";
+const LEG_CLS = "flex flex-wrap gap-3.5 text-xs text-txt2 mt-0.5 mb-1.5";
+const SW = "inline-block w-3.5 h-[3px] rounded-sm mr-[5px] align-[3px]";
+const SW_DASH = "inline-block w-3.5 h-0 border-t-2 border-dashed mr-[5px] align-[3px]";
+
+function xScale(bars, PL, PR, W) {
+  const n = bars.length, iw = (W - PL - PR) / Math.max(1, n);
+  return { iw, cx: i => PL + iw * (i + 0.5) };
+}
+
+function yTicks(lo, hi, y, PL, PR, W, fmtFn, ticks = 4) {
+  let out = "";
+  for (let t = 0; t <= ticks; t++) {
+    const v = lo + (hi - lo) * t / ticks, gy = y(v);
+    out += `<line x1="${PL}" y1="${gy.toFixed(1)}" x2="${W - PR}" y2="${gy.toFixed(1)}" stroke="var(--grid)"/>
+      <text x="${W - PR + 6}" y="${(gy + 4).toFixed(1)}" fill="var(--text-muted)" font-size="11">${fmtFn(v)}</text>`;
+  }
+  return out;
+}
+
+function timeLabels(bars, cx, H, W) {
+  const want = W < 520 ? ["10:00", "12:00", "14:00"]
+    : W < 800 ? ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00"]
+    : ["09:30", "10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "15:20"];
+  return bars.map((b, i) => want.includes(b.t)
+    ? `<text x="${cx(i).toFixed(1)}" y="${H - 5}" fill="var(--text-muted)" font-size="11" text-anchor="middle">${b.t}</text>` : "").join("");
+}
+
+const path = (pts) => pts.filter(p => p[1] != null && Number.isFinite(p[1]))
+  .map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join("");
+
+function drawCharts(data, r) {
+  const box = $("#charts");
+  if (!box) return;
+  const bars = data.bars;
+  const H3 = "text-[13px] m-0 mb-1 text-txt2 font-semibold";
+  box.innerHTML = `
+    <div>
+      <h3 class="${H3}">당일 1분봉 가격 · VWAP · 손절선</h3>
+      <div class="${LEG_CLS}"><span><i class="${SW}" style="background:var(--text-primary)"></i>종가</span>
+        <span><i class="${SW}" style="background:var(--accent)"></i>VWAP</span>
+        <span><i class="${SW}" style="background:var(--warning)"></i>5분봉 20이평</span>
+        <span><i class="${SW_DASH}" style="border-color:var(--critical)"></i>손절선 ${fmt(r["손절가"])}</span>
+        <span class="text-txt3">아래 막대: 분당 거래량 (적=상승봉, 청=하락봉) · 음영: 장 초반 ${data.early_minutes}분</span></div>
+      <div class="relative" id="price-box"></div>
+    </div>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(300px,1fr))] gap-4">
+      <div>
+        <h3 class="${H3}">장 초반 누적 거래량 — 오늘 vs 평소 (${data.profile_days}일 평균)</h3>
+        <div class="${LEG_CLS}"><span><i class="${SW}" style="background:var(--up)"></i>오늘</span>
+          <span><i class="${SW_DASH}" style="border-color:var(--text-muted)"></i>평소 같은 시각</span></div>
+        <div class="relative" id="early-box"></div>
+      </div>
+      <div>
+        <h3 class="${H3}">누적 매수세 (매수 추정 − 매도 추정)</h3>
+        <div class="${LEG_CLS}"><span class="text-txt3">우상향이면 매수세가 이어지는 중 · 틱 규칙 추정치 · 동시호가 제외</span></div>
+        <div class="relative" id="cvd-box"></div>
+      </div>
+    </div>`;
+  drawPrice(bars, r, data);
+  drawEarly(bars, data);
+  drawCvd(bars);
+}
+
+function drawPrice(bars, r, data) {
+  const W = widthOf($("#price-box"));
+  const H = W < 520 ? 280 : 340, PL = 4, PR = 62, PT = 10, PB = 22;
+  const PH = Math.round((H - PT - PB) * 0.72), GAP = 8, VH = H - PT - PB - PH - GAP;
+  const { iw, cx } = xScale(bars, PL, PR, W);
+  const vals = bars.flatMap(b => [b.h, b.l, b.vwap, b.ma]).concat([r["손절가"]]).filter(v => v != null);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const pad = (hi - lo) * 0.06 || 1; lo -= pad; hi += pad;
+  const y = v => PT + PH - (v - lo) / (hi - lo) * PH;
+  const vmax = Math.max(...bars.map(b => b.v)) || 1;
+  const vy = v => PT + PH + GAP + VH - v / vmax * VH;
+  const earlyEnd = bars.findIndex(b => b.m > data.early_minutes);
+  const shade = earlyEnd > 0 ? `<rect x="${PL}" y="${PT}" width="${(cx(earlyEnd - 1) + iw / 2 - PL).toFixed(1)}" height="${PH + GAP + VH}" fill="var(--accent)" opacity=".06"/>` : "";
+  const vol = bars.map((b, i) => `<rect x="${(cx(i) - Math.max(1, iw * .7) / 2).toFixed(1)}" y="${vy(b.v).toFixed(1)}" width="${Math.max(1, iw * .7).toFixed(1)}" height="${(PT + PH + GAP + VH - vy(b.v)).toFixed(1)}" fill="${b.c >= b.o ? "var(--up)" : "var(--down)"}" opacity=".5"/>`).join("");
+  const stop = r["손절가"];
+  $("#price-box").innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(r["종목명"])} 당일 1분봉 종가, VWAP, 이평, 손절선과 분당 거래량">
+    ${shade}${yTicks(lo, hi, y, PL, PR, W, v => fmt(v))}
+    ${vol}
+    <path d="${path(bars.map((b, i) => [cx(i), y(b.vwap)]))}" fill="none" stroke="var(--accent)" stroke-width="1.6"/>
+    <path d="${path(bars.map((b, i) => [cx(i), b.ma == null ? null : y(b.ma)]))}" fill="none" stroke="var(--warning)" stroke-width="1.6"/>
+    <path d="${path(bars.map((b, i) => [cx(i), y(b.c)]))}" fill="none" stroke="var(--text-primary)" stroke-width="1.4"/>
+    ${stop != null ? `<line x1="${PL}" x2="${W - PR}" y1="${y(stop).toFixed(1)}" y2="${y(stop).toFixed(1)}" stroke="var(--critical)" stroke-width="1.3" stroke-dasharray="5 4"/>` : ""}
+    ${timeLabels(bars, cx, H, W)}
+    <line id="p-cross" y1="${PT}" y2="${PT + PH + GAP + VH}" stroke="var(--text-muted)" stroke-dasharray="3 3" opacity="0"/>
+  </svg><div class="${TIP_CLS}" id="p-tip"></div>`;
+  hover($("#price-box"), bars, cx, PL, PR, iw, W, "#p-cross", "#p-tip", b =>
+    `<b>${b.t}</b>종가 ${fmt(b.c)} · 고 ${fmt(b.h)} · 저 ${fmt(b.l)}<br>VWAP ${fmt(b.vwap)}${b.ma != null ? ` · 이평 ${fmt(b.ma)}` : ""}<br>거래량 ${fmt(b.v)}`);
+}
+
+function drawEarly(bars, data) {
+  const W = widthOf($("#early-box"));
+  const H = 200, PL = 4, PR = 52, PT = 10, PB = 22, PH = H - PT - PB;
+  const early = bars.filter(b => b.m <= data.early_minutes);
+  let cum = 0;
+  const actual = early.map(b => (cum += b.v));
+  const exp = new Map((data.profile || []).map(p => [p.m, p.expected]));
+  const expected = early.map(b => exp.get(b.m));
+  const all = actual.concat(expected.filter(v => v != null));
+  const hi = Math.max(...all, 1) * 1.05;
+  const y = v => PT + PH - v / hi * PH;
+  const { cx, iw } = xScale(early, PL, PR, W);
+  const step = W < 420 ? 20 : 10;
+  const labels = early.map((b, i) => (b.m % step === 0) ? `<text x="${cx(i).toFixed(1)}" y="${H - 5}" fill="var(--text-muted)" font-size="11" text-anchor="middle">${b.t}</text>` : "").join("");
+  const last = actual.length - 1, ratio = expected[last] ? actual[last] / expected[last] : null;
+  $("#early-box").innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="장 초반 누적 거래량 오늘과 평소 비교">
+    ${yTicks(0, hi, y, PL, PR, W, v => fmt(v / 1e4) + "만")}
+    <path d="${path(early.map((b, i) => [cx(i), expected[i] == null ? null : y(expected[i])]))}" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-dasharray="6 4"/>
+    <path d="${path(early.map((b, i) => [cx(i), y(actual[i])]))}" fill="none" stroke="var(--up)" stroke-width="2.2"/>
+    ${ratio ? `<text x="${(cx(last) - 6).toFixed(1)}" y="${(y(actual[last]) + 16).toFixed(1)}" text-anchor="end" fill="var(--text-primary)" font-size="13" font-weight="700">${fmt(ratio * 100)}%</text>` : ""}
+    ${labels}
+    <line id="e-cross" y1="${PT}" y2="${PT + PH}" stroke="var(--text-muted)" stroke-dasharray="3 3" opacity="0"/>
+  </svg><div class="${TIP_CLS}" id="e-tip"></div>`;
+  hover($("#early-box"), early, cx, PL, PR, iw, W, "#e-cross", "#e-tip", (b, i) =>
+    `<b>${b.t}</b>오늘 누적 ${fmt(actual[i])}<br>평소 ${expected[i] == null ? "–" : fmt(expected[i])}` +
+    (expected[i] ? `<br>배수 ${fmt(actual[i] / expected[i] * 100)}%` : ""));
+}
+
+function drawCvd(bars) {
+  const W = widthOf($("#cvd-box"));
+  const H = 200, PL = 4, PR = 52, PT = 10, PB = 22, PH = H - PT - PB;
+  const pts = bars.map(b => b.cvd);
+  const vals = pts.filter(v => v != null);
+  if (!vals.length) { $("#cvd-box").innerHTML = EMPTY("데이터 없음"); return; }
+  let lo = Math.min(0, ...vals), hi = Math.max(0, ...vals);
+  const pad = (hi - lo) * 0.08 || 1; lo -= pad; hi += pad;
+  const y = v => PT + PH - (v - lo) / (hi - lo) * PH;
+  const { cx, iw } = xScale(bars, PL, PR, W);
+  const lastUp = vals[vals.length - 1] >= (vals[Math.max(0, vals.length - 31)] ?? 0);
+  $("#cvd-box").innerHTML = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="당일 누적 매수세 추이">
+    ${yTicks(lo, hi, y, PL, PR, W, v => fmt(v / 1e4) + "만")}
+    <line x1="${PL}" x2="${W - PR}" y1="${y(0).toFixed(1)}" y2="${y(0).toFixed(1)}" stroke="var(--text-muted)"/>
+    <path d="${path(bars.map((b, i) => [cx(i), b.cvd == null ? null : y(b.cvd)]))}" fill="none" stroke="${lastUp ? "var(--up)" : "var(--down)"}" stroke-width="2"/>
+    ${timeLabels(bars, cx, H, W)}
+    <line id="c-cross" y1="${PT}" y2="${PT + PH}" stroke="var(--text-muted)" stroke-dasharray="3 3" opacity="0"/>
+  </svg><div class="${TIP_CLS}" id="c-tip"></div>`;
+  hover($("#cvd-box"), bars, cx, PL, PR, iw, W, "#c-cross", "#c-tip", b =>
+    `<b>${b.t}</b>누적 매수세 ${b.cvd == null ? "– (동시호가)" : signed(b.cvd, 0) + "주"}`);
+}
+
+function hover(boxEl, rows, cx, PL, PR, iw, W, crossSel, tipSel, html) {
+  const svg = boxEl.querySelector("svg"), cross = boxEl.querySelector(crossSel), tip = boxEl.querySelector(tipSel);
+  svg.addEventListener("mousemove", ev => {
+    const rect = svg.getBoundingClientRect();
+    const sx = (ev.clientX - rect.left) / rect.width * W;
+    const i = Math.max(0, Math.min(rows.length - 1, Math.floor((sx - PL) / iw)));
+    cross.setAttribute("x1", cx(i)); cross.setAttribute("x2", cx(i)); cross.setAttribute("opacity", ".7");
+    tip.innerHTML = html(rows[i], i);
+    tip.style.opacity = 1;
+    const px = cx(i) / W * rect.width;
+    tip.style.left = Math.min(rect.width - tip.offsetWidth - 8, Math.max(0, px + 12)) + "px";
+    tip.style.top = Math.max(0, ev.clientY - rect.top - 10) + "px";
+  });
+  svg.addEventListener("mouseleave", () => { tip.style.opacity = 0; cross.setAttribute("opacity", "0"); });
+}
+
+/* ------------------------------------------------------------------ 가이드 */
+function renderGuide() {
+  const c = (STATE && STATE.config) || {};
+  const pct = v => v == null ? "–" : fmt(v * 100) + "%";
+  const cfgRows = [
+    ["후보", `거래대금 상위 ${c.candidates}종목 (ETF·우선주·거래정지 제외)`],
+    ["거래대금 하한", eok(c.min_turnover)], ["최저 주가", fmt(c.min_price) + "원"],
+    ["1차 포착 구간", `09:00 ~ ${c.early_minutes}분`], ["평소 거래량", `과거 ${c.profile_days}영업일 같은 시각 평균`],
+    ["급증 기준", `${pct(c.surge_min)} 이상 (강함 ${pct(c.surge_strong)})`],
+    ["연속성 판단 시작", `장 시작 ${c.confirm_minutes}분 후`], ["연속성 창", `최근 ${c.flow_window}분`],
+    ["매수 우위", `매수 추정 비중 ${pct(c.buy_ratio_min)} 이상`],
+    ["이탈 (거래량 감소 시)", `매수 비중 ${pct(c.exit_buy_ratio)} 미만 & 거래량 ${pct(c.volume_fade)} 미만`],
+    ["손절선", `${c.ma_rule} ${c.ma_period}이평 (형성 전 VWAP)`],
+    ["바닥권", `120일 범위 하위 ${pct(c.bottom_position)}`], ["고점권", `120일 고점의 ${pct(c.near_high)} 이상`],
+    ["갭 주의", `시가 갭 +${pct(c.gap_warn)} 이상`],
+  ];
+  const H3 = "text-[15px] font-semibold mt-6 mb-2.5 pb-1.5 border-b border-line first:mt-0";
+  const CALLOUT = "border-l-[3px] bg-s2 px-4 py-3 rounded-r-lg my-3 text-[13px] [&>b]:block [&>b]:mb-1";
+  const STEP = "bg-s2 rounded-[10px] px-4 py-3.5";
+  const STEP_N = "text-[11px] font-bold text-accent tracking-wider";
+  const STEP_H = "mt-1 mb-1.5 text-[15px] font-semibold";
+  const STEP_P = "text-[13px] mb-1.5 text-txt2";
+  const STEP_UL = "m-0 pl-4 text-[12.5px] text-txt2 list-disc";
+  dropGrid();
+  VIEW_KIND = "guide";
+  $("#detail").hidden = true;
+  $("#view").innerHTML = `<div class="bg-s1 border border-line rounded-xl px-5 py-5 leading-[1.75]">
+    <div class="${CALLOUT} border-bad"><b>백테스트로 검증되지 않은 전략입니다</b>
+      세력추정매매와 달리 이 저장소에서 승률·기대값을 측정하지 않았습니다. 점수 배점은 경험칙입니다.
+      소액·관찰용으로 먼저 쓰세요. 자동 주문은 하지 않습니다.</div>
+
+    <h3 class="${H3}">전략 흐름</h3>
+    <p class="mb-2.5 text-txt2">장 초반에 평소보다 돈이 압도적으로 몰리는 종목을 찾고, 그 돈이 계속 들어오는지를 따라가 주도주를 포착합니다.</p>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
+      <div class="${STEP}"><div class="${STEP_N}">STEP 1 · 09:00~10:00</div><h4 class="${STEP_H}">거래량 급증 포착</h4>
+        <p class="${STEP_P}">평소 <b>같은 시각까지</b>의 누적 거래량과 오늘을 비교합니다.</p>
+        <ul class="${STEP_UL}"><li>장 초반엔 원래 거래가 몰리므로, 하루 평균을 시간에 비례해 나누지 않고 과거 ${c.profile_days}영업일 실제 분봉으로 잽니다</li>
+          <li>${pct(c.surge_min)}~${pct(c.surge_strong)} 이상이면 포착</li>
+          <li>거래수량보다 <b>거래대금</b>이 우선 — 저가주 왜곡을 막으려고 대금 상위에서만 찾습니다</li></ul></div>
+      <div class="${STEP}"><div class="${STEP_N}">STEP 2 · 사람이 확인</div><h4 class="${STEP_H}">재료 검증</h4>
+        <p class="${STEP_P}">토스 OpenAPI 에 뉴스·공시가 없어 <b>자동 판정하지 않습니다.</b></p>
+        <ul class="${STEP_UL}"><li>갭상승이 크면 단발성 호재 → 재료 소멸 후 음봉 위험</li>
+          <li>재료가 안 보이는데 돈이 계속 들어오면 선매집·기관/외국인 매수 가능성 — 외국인·기관 잠정 순매수를 참고</li>
+          <li>상세 패널의 "토스에서 뉴스·공시 확인"으로 직접 확인하세요</li></ul></div>
+      <div class="${STEP}"><div class="${STEP_N}">STEP 3 · 30분 이후</div><h4 class="${STEP_H}">수급 연속성</h4>
+        <p class="${STEP_P}">최근 ${c.flow_window}분 동안 돈의 흐름이 꺾이지 않는지 봅니다.</p>
+        <ul class="${STEP_UL}"><li>매수 추정 비중 ${pct(c.buy_ratio_min)} 이상</li>
+          <li>누적 매수세가 우상향</li>
+          <li>VWAP·손절선 위, 거래량이 급감하지 않음</li>
+          <li>모두 충족하면 <b>지속</b>, 여기에 과열·고점을 더 거르면 <b>🔥진입</b></li></ul></div>
+      <div class="${STEP}"><div class="${STEP_N}">위치 · 대응</div><h4 class="${STEP_H}">차트 위치와 손절</h4>
+        <p class="${STEP_P}">어디서 터졌는지가 신호의 질을 가릅니다.</p>
+        <ul class="${STEP_UL}"><li>바닥권·저항 돌파에서의 수급은 강한 신호</li>
+          <li>120일 고점권에서의 급증은 <b>물량 넘기기(설거지)</b> 주의</li>
+          <li>손절: 5분봉 20이평 이탈, 또는 거래량이 줄며 매도 우위로 전환 → <b>이탈</b></li></ul></div>
+    </div>
+
+    <h3 class="${H3}">상태</h3>
+    <table class="w-full border-collapse my-2 text-[13px]
+                  [&_td]:px-3 [&_td]:py-2 [&_td]:align-top [&_td]:border-t [&_td]:border-line
+                  [&_tr>td:first-child]:whitespace-nowrap"><tbody>
+      <tr><td>${ENTER_BADGE}</td><td><b>여러 지표를 종합해 들어갈 만한 것</b> — 수급 지속 + 갭 과열 아님 + 고점권 아님 + 종합 점수 ${c.entry_score_min ?? 70}점 이상. <b>장중에 새로 진입이 되면 텔레그램으로 보냅니다</b> (재료·뉴스·공시는 직접 확인)</td></tr>
+      <tr><td>${stBadge("관찰")}</td><td>장 초반 급증은 포착됐지만 아직 장 시작 ${c.confirm_minutes}분 전 — 연속성을 판단하기 이릅니다</td></tr>
+      <tr><td>${stBadge("지속")}</td><td>연속성 조건(매수 우위·누적 매수세·VWAP·손절선·거래량)을 모두 충족. 여기서 과열·고점을 더 거른 것이 <b>진입</b>입니다</td></tr>
+      <tr><td>${stBadge("약화")}</td><td>급증은 있었지만 매수 우위·누적 매수세·VWAP·거래량 중 일부가 미달</td></tr>
+      <tr><td>${stBadge("이탈")}</td><td>손절선 아래, 또는 거래량이 줄며 매도 우위로 전환 — 보유 중이면 즉시 대응</td></tr>
+    </tbody></table>
+
+    <h3 class="${H3}">데이터 한계</h3>
+    <div class="${CALLOUT} border-warn"><b>매수세는 추정치입니다</b>
+      토스 체결 데이터에는 매수/매도 구분이 없습니다. 1분봉 종가가 직전보다 오르면 매수, 내리면 매도로 나누는
+      틱 규칙으로 추정합니다. HTS 의 체결강도와 값이 다릅니다. 종가 동시호가(15:20~15:30) 체결은 흐름 계산에서 뺍니다.</div>
+    <div class="${CALLOUT} border-warn"><b>호가 잔량은 점수에 넣지 않습니다</b>
+      매수 잔량이 많은 것을 강세로 볼지(받쳐 줌) 약세로 볼지(허매수) 해석이 갈려 표시만 합니다.</div>
+    <div class="${CALLOUT} border-accent"><b>스캔 주기</b>
+      장중에는 ${STATE && STATE.interval ? STATE.interval : 60}초마다, 장 밖에서는 30분에 한 번만 확인합니다.
+      과거 분봉은 한 번 받으면 파일로 보관해 두 번째 스캔부터 빨라집니다.</div>
+
+    <h3 class="${H3}">현재 기준값</h3>
+    <dl class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-y-2 gap-x-5 m-0">${
+      cfgRows.map(([k, v]) => `<div class="flex justify-between gap-3 pb-1.5 border-b border-dashed border-line text-[13px]">
+        <dt class="text-txt2">${k}</dt><dd class="m-0 font-semibold tabular-nums">${v}</dd></div>`).join("")}</dl>
+  </div>`;
+}
+
+/* ------------------------------------------------------------------ 시작 */
+$("#scan-btn").onclick = async () => {
+  if (STATE && STATE.configured === false) { Session.open(); return; }
+  $("#scan-btn").disabled = true;
+  await fetch("/api/supply/scan", { method: "POST" });
+  setTimeout(refresh, 600);
+};
+document.addEventListener("sessionchange", () => { SELECTED = null; CHART = null; $("#detail").innerHTML = ""; refresh(); });
+refresh();
+setInterval(refresh, 5000);
+</script>
+</body>
+</html>

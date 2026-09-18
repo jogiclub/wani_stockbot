@@ -4,199 +4,71 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>세력 추정 매매법 스크리너 · 왔니 주식</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="/static/ui.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
 <link rel="stylesheet" href="/static/common.css">
 <script src="/static/gnb.js"></script>
 <script src="/static/session.js"></script>
-<style>
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 20px 60px; }
-  .page-head { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 18px; }
-  h1 { font-size: 19px; margin: 0; letter-spacing: -.01em; }
-  h1 span { color: var(--text-muted); font-weight: 400; font-size: 13px; margin-left: 8px; }
-  .spacer { flex: 1 1 auto; }
-
-  .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-           gap: 10px; margin-bottom: 18px; }
-  .tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
-  .tile .label { font-size: 12px; color: var(--text-muted); margin-bottom: 4px; }
-  .tile .value { font-size: 26px; font-weight: 650; letter-spacing: -.02em;
-                 font-variant-numeric: tabular-nums; }
-  .tile .value small { font-size: 13px; font-weight: 500; color: var(--text-muted); margin-left: 3px; }
-
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 14px; }
-  .tab { padding: 9px 14px; border: 0; background: none; color: var(--text-secondary);
-         border-bottom: 2px solid transparent; border-radius: 0; font-weight: 500; }
-  .tab[aria-selected="true"] { color: var(--text-primary); border-bottom-color: var(--accent); font-weight: 650; }
-  .tab .count { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
-                background: var(--surface-2); font-size: 11px; color: var(--text-secondary); }
-
-  .panel { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
-  .table-scroll { overflow-x: auto; }
-  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
-  th, td { padding: 10px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
-  th { font-size: 12px; font-weight: 600; color: var(--text-muted); background: var(--surface-2);
-       position: sticky; top: 0; text-align: right; }
-  th:first-child, td:first-child, th:nth-child(2), td:nth-child(2) { text-align: left; }
-  tbody tr { cursor: pointer; }
-  tbody tr:hover { background: var(--surface-2); }
-  tbody tr[aria-selected="true"] { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-  tbody tr:last-child td { border-bottom: 0; }
-  .sym { font-weight: 650; }
-  .muted { color: var(--text-muted); }
-  .up { color: var(--up); font-weight: 600; }
-  .down { color: var(--down); font-weight: 600; }
-  .empty { padding: 48px 20px; text-align: center; color: var(--text-muted); }
-
-  /* 상세 패널 */
-  .detail { margin-top: 14px; background: var(--surface-1); border: 1px solid var(--border);
-            border-radius: 12px; padding: 16px; }
-  .detail-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 4px; }
-  .detail-head h2 { font-size: 17px; margin: 0; }
-  .detail-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-                 gap: 10px 16px; margin: 14px 0 6px; }
-  .detail-grid div { font-size: 12px; color: var(--text-muted); }
-  .detail-grid strong { display: block; font-size: 15px; color: var(--text-primary);
-                        font-weight: 600; font-variant-numeric: tabular-nums; }
-  .legend { display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: var(--text-secondary); margin-top: 8px; }
-  .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
-  .chart-box { position: relative; margin-top: 10px; }
-  svg { display: block; width: 100%; height: auto; }
-  .tooltip { position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s;
-             background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
-             padding: 8px 10px; font-size: 12px; line-height: 1.55; white-space: nowrap;
-             box-shadow: 0 4px 16px rgba(0,0,0,.18); font-variant-numeric: tabular-nums; z-index: 5; }
-  .tooltip b { display: block; margin-bottom: 3px; }
-  dl.cfg { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-           gap: 8px 20px; margin: 0; padding: 16px; }
-  dl.cfg > div { display: flex; justify-content: space-between; gap: 12px;
-                 border-bottom: 1px dashed var(--border); padding-bottom: 6px; font-size: 13px; }
-  dl.cfg dt { color: var(--text-secondary); }
-  dl.cfg dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
-  .warn-bar { background: color-mix(in srgb, var(--warning) 16%, transparent);
-              border: 1px solid var(--warning); color: var(--text-primary);
-              padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 13px; }
-  .warn-bar b { margin-right: 6px; }
-  .score { display: inline-flex; align-items: baseline; gap: 4px; font-variant-numeric: tabular-nums; }
-  .score b { font-size: 17px; font-weight: 700; }
-  .score .g { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 5px; color: #fff; }
-  .g-Ap, .g-A { background: var(--good); }
-  .g-B { background: var(--accent); }
-  .g-C { background: var(--warning); color: #111; }
-  .g-D { background: var(--critical); }
-  .bar { height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; min-width: 74px; }
-  .bar i { display: block; height: 100%; background: var(--accent); }
-  .regime { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px;
-            border-radius: 10px; margin-bottom: 14px; font-size: 13px; border: 1px solid var(--border);
-            background: var(--surface-1); }
-  .regime[hidden] { display: none; }
-  .regime.off { background: color-mix(in srgb, var(--critical) 12%, transparent); border-color: var(--critical); }
-  .regime.on  { background: color-mix(in srgb, var(--good) 12%, transparent); border-color: var(--good); }
-  .breakdown { width: 100%; margin-top: 4px; }
-  .breakdown td { border: 0; padding: 5px 8px 5px 0; }
-  .breakdown td:first-child { color: var(--text-secondary); width: 110px; }
-  .breakdown td:nth-child(2) { width: 90px; }
-  .breakdown td:nth-child(3) { text-align: left; font-weight: 600; width: 70px; }
-  .breakdown td:last-child { text-align: left; color: var(--text-muted); font-size: 12px; white-space: normal; }
-  .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
-         font-size: 11px; font-weight: 600; background: color-mix(in srgb, var(--warning) 28%, transparent);
-         color: var(--text-primary); }
-  /* 가이드 탭 */
-  .guide { padding: 20px 22px; line-height: 1.75; }
-  .guide h3 { font-size: 15px; margin: 26px 0 10px; padding-bottom: 6px;
-              border-bottom: 1px solid var(--border); }
-  .guide h3:first-child { margin-top: 0; }
-  .guide p { margin: 0 0 10px; color: var(--text-secondary); }
-  .guide table { margin: 8px 0 4px; }
-  .guide table td, .guide table th { white-space: normal; }
-  .guide table th.l, .guide table td.l { text-align: left; }
-  .guide code { background: var(--surface-2); padding: 2px 6px; border-radius: 5px; font-size: 13px; }
-  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
-  .step { background: var(--surface-2); border-radius: 10px; padding: 14px 16px; }
-  .step .n { font-size: 11px; font-weight: 700; color: var(--accent); letter-spacing: .06em; }
-  .step h4 { margin: 3px 0 6px; font-size: 15px; }
-  .step p { font-size: 13px; margin-bottom: 8px; }
-  .step ul { margin: 0; padding-left: 17px; font-size: 12.5px; color: var(--text-secondary); }
-  .step li { margin-bottom: 3px; }
-  .callout { border-left: 3px solid var(--accent); background: var(--surface-2);
-             padding: 12px 16px; border-radius: 0 8px 8px 0; margin: 12px 0; font-size: 13px; }
-  .callout.warn { border-left-color: var(--warning); }
-  .callout.bad { border-left-color: var(--critical); }
-  .callout b { display: block; margin-bottom: 4px; }
-  .pos { background: var(--surface-2); border-radius: 10px; padding: 14px 16px; margin-top: 12px; }
-  .pos-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
-  .pos label { font-size: 12px; color: var(--text-muted); display: block; margin-bottom: 4px; }
-  .pos input, .pos select { font: inherit; padding: 7px 10px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary);
-    width: 150px; font-variant-numeric: tabular-nums; }
-  .pos-out { margin-top: 12px; display: grid; gap: 8px 18px;
-             grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
-  .pos-out div { font-size: 12px; color: var(--text-muted); }
-  .pos-out strong { display: block; font-size: 17px; color: var(--text-primary);
-                    font-weight: 650; font-variant-numeric: tabular-nums; }
-  .ok { color: var(--good); font-weight: 600; }
-  a.toss { color: inherit; text-decoration: underline dotted var(--text-muted);
-           text-underline-offset: 3px; }
-  a.toss:hover { color: var(--accent); text-decoration-color: var(--accent); }
-  a.toss.sym { font-weight: 650; }
-  .toss-btn { display: inline-block; font-size: 12px; padding: 4px 10px; border-radius: 8px;
-              border: 1px solid var(--border); background: var(--surface-2);
-              color: var(--text-secondary); text-decoration: none; }
-  .toss-btn:hover { border-color: var(--accent); color: var(--accent); }
-  .order-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-               margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--border); }
-  button.danger { background: var(--critical); border-color: transparent; }
-  button.danger:hover:not(:disabled) { filter: brightness(1.1); }
-  button:disabled { opacity: .45; cursor: not-allowed; }
-  .od { margin-top: 12px; padding: 12px 14px; border-radius: 10px; font-size: 13px;
-        background: var(--surface-1); border: 1px solid var(--border); }
-  .od.good { border-color: var(--good); background: color-mix(in srgb, var(--good) 10%, transparent); }
-  .od.bad { border-color: var(--critical); background: color-mix(in srgb, var(--critical) 10%, transparent); }
-  .od ul { margin: 0; padding-left: 18px; }
-  .od li { margin-bottom: 3px; }
-  .od code { background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
-  th[title] { cursor: help; text-decoration: underline dotted var(--text-muted); text-underline-offset: 3px; }
-  footer { margin-top: 22px; font-size: 12px; color: var(--text-muted); text-align: center; }
-</style>
+<script src="/static/stockmenu.js"></script>
 </head>
-<body>
+<body class="font-sans text-sm leading-normal antialiased">
 <div data-gnb="screener"></div>
 
 <!-- GNB 우측으로 옮겨질 공통 컨트롤 (gnb.js 가 이동시킨다) -->
-<span class="badge" id="status" data-gnb-action><span class="dot"></span><span id="status-text">연결 중…</span></span>
-<button data-settings-btn title="내 토스 API 키 설정" data-gnb-action hidden>⚙ 설정</button>
+<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
+             bg-s2 text-txt2 border border-line" id="status" data-gnb-action>
+  <span class="w-[7px] h-[7px] rounded-full bg-txt3" id="status-dot"></span>
+  <span id="status-text">연결 중…</span></span>
+<button data-settings-btn data-gnb-action hidden>⚙ 설정</button>
 
-<div class="wrap">
-  <div class="page-head">
-    <h1>세력 추정 매매법 스크리너<span id="mode-label"></span></h1>
-    <div class="spacer"></div>
-    <button class="primary" id="scan-btn">지금 스캔</button>
+<div class="max-w-page mx-auto px-5 pt-5 pb-14">
+  <div class="flex flex-wrap gap-3 items-center mb-4">
+    <h1 class="m-0 text-[19px] font-semibold tracking-tight">세력 추정 매매법 스크리너
+      <span class="text-txt3 font-normal text-[13px] ml-2" id="mode-label"></span></h1>
+    <div class="flex-1"></div>
+    <button class="font-sans text-sm rounded-lg border border-transparent bg-accent text-white font-semibold px-3.5 py-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" id="scan-btn">지금 스캔</button>
   </div>
 
-  <div id="setup" class="setup-bar" hidden></div>
-  <div id="err" class="err-bar" hidden></div>
-  <div id="blocked" class="warn-bar" hidden></div>
-  <div id="regime" class="regime" hidden></div>
+  <div id="setup" hidden></div>
+  <div id="err" class="tint-bad border border-bad px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
+  <div id="blocked" class="tint-warn border border-warn px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
+  <div id="regime" hidden></div>
 
-  <section class="tiles" aria-label="요약">
-    <div class="tile"><div class="label">매수 시그널</div><div class="value" id="t-signals">–</div></div>
-    <div class="tile"><div class="label">돌파 대기</div><div class="value" id="t-watch">–</div></div>
-    <div class="tile"><div class="label">판정 종목</div><div class="value" id="t-scanned">–</div></div>
-    <div class="tile"><div class="label">필터 제외</div><div class="value" id="t-skipped">–</div></div>
-    <div class="tile"><div class="label">마지막 스캔</div><div class="value" id="t-last" style="font-size:17px">–</div></div>
-    <div class="tile"><div class="label">다음 스캔</div><div class="value" id="t-next" style="font-size:17px">–</div></div>
+  <section class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5 mb-4" aria-label="요약">
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1">매수 시그널</div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-signals">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1">돌파 대기</div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-watch">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1">판정 종목</div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-scanned">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1">필터 제외</div>
+      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-skipped">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1">마지막 스캔</div>
+      <div class="text-[17px] font-semibold tabular-nums" id="t-last">–</div></div>
+    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
+      <div class="text-xs text-txt3 mb-1">다음 스캔</div>
+      <div class="text-[17px] font-semibold tabular-nums" id="t-next">–</div></div>
   </section>
 
-  <div class="tabs" role="tablist">
-    <button class="tab" role="tab" data-tab="signals" aria-selected="true">매수 시그널<span class="count" id="c-signals">0</span></button>
-    <button class="tab" role="tab" data-tab="watch" aria-selected="false">돌파 대기<span class="count" id="c-watch">0</span></button>
-    <button class="tab" role="tab" data-tab="config" aria-selected="false">전략 설정</button>
-    <button class="tab" role="tab" data-tab="guide" aria-selected="false">가이드 · 근거</button>
+  <div class="flex gap-1 border-b border-line mb-3.5" role="tablist" id="tabs">
+    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="signals" aria-selected="true">매수 시그널<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-signals">0</span></button>
+    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="watch" aria-selected="false">돌파 대기<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-watch">0</span></button>
+    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="config" aria-selected="false">전략 설정</button>
+    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="guide" aria-selected="false">가이드 · 근거</button>
   </div>
 
-  <div class="panel" id="view"></div>
+  <div id="view"></div>
   <div id="detail"></div>
 
-  <footer>투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 데이터: 토스증권 OpenAPI</footer>
+  <footer class="mt-6 text-xs text-txt3 text-center">투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 데이터: 토스증권 OpenAPI</footer>
 </div>
+
 
 <script>
 const $ = (s) => document.querySelector(s);
@@ -223,11 +95,12 @@ async function refresh() {
     const rg = $("#regime");
     rg.hidden = !g.available;
     if (g.available) {
-      rg.className = "regime " + (g.on ? "on" : "off");
+      rg.className = "flex flex-wrap items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] mb-3.5 "
+        + "text-[13px] border " + (g.on ? "tint-good border-good" : "tint-bad border-bad");
       rg.innerHTML = `<b>시장 국면 ${g.on ? "우호 ✅" : "비우호 ⚠"}</b>
         <span>${g.symbol} ${fmt(g.close, 2)} / ${g.ma}일선 ${fmt(g.ma_value, 2)}
         (${g.gap_pct > 0 ? "+" : ""}${g.gap_pct}%)</span>
-        <span class="muted">${g.on
+        <span class="text-txt3">${g.on
           ? "백테스트상 이 국면의 시그널 평균 +0.173R"
           : "이 국면의 시그널은 백테스트 평균 −0.117R — 신규 진입 자제 권장"}</span>`;
     }
@@ -244,9 +117,9 @@ async function refresh() {
   }
 }
 
+const DOT = { live: "bg-good dot-live", busy: "bg-warn dot-busy", err: "bg-bad", "": "bg-txt3" };
 function setStatus(kind, text) {
-  const el = $("#status");
-  el.className = "badge " + kind;
+  $("#status-dot").className = `w-[7px] h-[7px] rounded-full ${DOT[kind] || DOT[""]}`;
   $("#status-text").textContent = text;
 }
 
@@ -259,7 +132,7 @@ function paint() {
       .forEach(id => $(id).textContent = "–");
     $("#c-signals").textContent = "0"; $("#c-watch").textContent = "0";
     $("#scan-btn").disabled = false;
-    $("#view").innerHTML = `<div class="empty">토스증권 API 키를 등록하면 스캔이 시작됩니다.</div>`;
+    $("#view").innerHTML = EMPTY("토스증권 API 키를 등록하면 스캔이 시작됩니다.");
     $("#detail").innerHTML = "";
     return;
   }
@@ -306,15 +179,11 @@ function renderTab() {
   else renderConfig();
 }
 
-/* 토스증권 종목 페이지를 새 창으로 연다.
-   행 클릭(상세 열기)과 겹치지 않도록 stopPropagation 한다. */
 const tossUrl = (symbol) => `https://www.tossinvest.com/stocks/${encodeURIComponent(symbol)}`;
 
-function tossLink(r, text, cls = "") {
-  const code = r["종목코드"];
-  return `<a class="toss ${cls}" href="${tossUrl(code)}" target="_blank" rel="noopener noreferrer"
-     title="토스증권에서 ${r["종목명"]}(${code}) 열기" onclick="event.stopPropagation()">${text}</a>`;
-}
+/* 종목코드·종목명 셀은 StockMenu.link 로 만든다. 누르면 종목 메뉴가 뜨고,
+   행 클릭(상세 열기)은 StockMenu.fromEvent 가 true 면 건너뛴다. */
+
 
 const TIPS = {
   "점수": "6개 요인을 백테스트 실측 성과로 채점한 100점 만점 점수. 75점이 실전 컷오프입니다.",
@@ -334,63 +203,125 @@ const TIPS = {
   "경과": "기준봉 이후 경과 영업일",
 };
 
-function table(cols, rows, rowFn, onClick) {
-  if (!rows.length) return `<div class="empty">해당 조건의 종목이 없습니다.</div>`;
-  const head = cols.map(c => `<th${TIPS[c] ? ` title="${TIPS[c]}"` : ""}>${c}</th>`).join("");
-  const body = rows.map((r, i) => `<tr data-i="${i}" ${onClick ? "" : 'style="cursor:default"'}
-      aria-selected="${SELECTED && SELECTED["종목코드"] === r["종목코드"]}">${rowFn(r)}</tr>`).join("");
-  return `<div class="table-scroll"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
-}
+const EMPTY = (text) =>
+  `<div class="bg-s1 border border-line rounded-xl py-12 px-5 text-center text-txt3">${text}</div>`;
 
-function renderSignals() {
-  const rows = STATE.signals;
-  $("#view").innerHTML = table(
-    ["점수", "종목코드", "종목명", "기준봉일", "윗꼬리", "기준봉 거래량", "조정", "전일고가", "현재가", "거래량 증가", "매수가", "손절가", "손절폭"],
-    rows,
-    r => `<td>${scoreCell(r)}</td>
-      <td>${tossLink(r, r["종목코드"], "sym")}</td>
-      <td>${tossLink(r, r["종목명"])}${(r["유의사항"] || [])
-        .map(w => `<span class="tag">${w}</span>`).join("")}</td>
-      <td class="muted">${r["기준봉일"].slice(5)}</td>
-      <td>${r["기준봉_윗꼬리%"]}%</td>
-      <td>×${r["기준봉_거래량배수"]}</td>
-      <td class="muted">${r["조정일수"]}일</td>
-      <td>${fmt(r["전일고가"])}</td>
-      <td class="${r["현재가"] >= r["전일고가"] ? "up" : "down"}">${fmt(r["현재가"])}</td>
-      <td class="up">+${fmt(r["거래량증가율%"])}%</td>
-      <td>${fmt(r["매수가"])}</td>
-      <td class="down">${fmt(r["손절가"])}</td>
-      <td class="muted">${r["손절폭%"]}%</td>`,
-    true);
-  bindRows(rows, r => selectSignal(r));
-}
+/* 등급 배지 색 — A+·A 는 양호, B 는 관망, C·D 는 경고 */
+const GRADE_BG = { "A+": "bg-good", "A": "bg-good", "B": "bg-accent",
+                   "C": "bg-warn text-black", "D": "bg-bad" };
+const gradeBadge = (grade) =>
+  `<span class="text-[11px] font-bold px-1.5 py-px rounded text-white ${GRADE_BG[grade] || "bg-txt3"}">${grade}</span>`;
+const scoreBar = (pct) =>
+  `<div class="h-[5px] rounded-[3px] bg-s2 overflow-hidden min-w-[74px]">
+     <i class="block h-full bg-accent" style="width:${pct}%"></i></div>`;
 
 function scoreCell(r) {
   if (r["점수"] == null) return "–";
-  const cls = "g-" + (r["등급"] || "").replace("+", "p");
-  return `<div class="score"><b>${r["점수"]}</b><span class="g ${cls}">${r["등급"]}</span></div>
-          <div class="bar"><i style="width:${r["점수"]}%"></i></div>`;
+  return `<div class="leading-tight pt-1">
+      <div class="flex items-baseline gap-1 tabular-nums">
+        <b class="text-[17px] font-bold">${r["점수"]}</b>${gradeBadge(r["등급"])}</div>
+      ${scoreBar(r["점수"])}</div>`;
+}
+
+/* ------------------------------------------------------- 목록 (AG Grid) */
+let GRID = null, GRID_KIND = null, GRID_ROWS = [];
+
+/** 그리드를 담을 상자. 탭을 오갈 때마다 만들고 이전 그리드는 정리한다. */
+function gridHost() {
+  if (GRID) { GRID.destroy(); GRID = null; }
+  $("#view").innerHTML = `<div id="grid" class="grid-clickable w-full h-[min(60vh,560px)]"></div>`;
+  return $("#grid");
+}
+
+/* 선택된 행을 표시한다 (상세 패널과 짝) */
+const ROW_CLASS = { "!bg-s2": (p) => !!SELECTED && p.data && SELECTED["종목코드"] === p.data["종목코드"] };
+
+const stockCol = (field, cls = "") => ({
+  field, minWidth: 110,
+  cellRenderer: (p) => StockMenu.link(p.data, p.value, cls),
+});
+const numCol = (field, opts = {}) => ({
+  field, type: "numericColumn", minWidth: 96,
+  valueFormatter: (p) => fmt(p.value, opts.d || 0), ...opts,
+});
+
+function renderSignals() {
+  const rows = STATE.signals;
+  GRID_ROWS = rows;
+  if (!rows.length) { GRID_KIND = null; $("#view").innerHTML = EMPTY("매수 시그널이 없습니다."); return; }
+  if (GRID_KIND !== "signals") {
+    GRID_KIND = "signals";
+    GRID = Grid.create(gridHost(), {
+      rows, rowHeight: 46, options: { rowClassRules: ROW_CLASS },
+      columns: [
+        { field: "점수", headerTooltip: TIPS["점수"], minWidth: 132, sort: "desc",
+          cellRenderer: (p) => scoreCell(p.data) },
+        { ...stockCol("종목코드", "font-semibold"), headerName: "종목코드" },
+        { field: "종목명", minWidth: 140, cellRenderer: (p) =>
+            StockMenu.link(p.data, p.value) + (p.data["유의사항"] || [])
+              .map(w => `<span class="ml-1.5 px-1.5 py-px rounded-full text-[11px] font-semibold tint-warn">${w}</span>`).join("") },
+        { field: "기준봉일", headerTooltip: TIPS["기준봉일"], minWidth: 100,
+          cellClass: "text-txt3 tabular-nums", valueFormatter: (p) => p.value.slice(5) },
+        { field: "기준봉_윗꼬리%", headerName: "윗꼬리", headerTooltip: TIPS["윗꼬리"],
+          type: "numericColumn", minWidth: 92, valueFormatter: (p) => p.value + "%" },
+        { field: "기준봉_거래량배수", headerName: "기준봉 거래량", headerTooltip: TIPS["기준봉 거래량"],
+          type: "numericColumn", minWidth: 118, valueFormatter: (p) => "×" + p.value },
+        { field: "조정일수", headerName: "조정", headerTooltip: TIPS["조정"], type: "numericColumn",
+          minWidth: 84, cellClass: "text-txt3 tabular-nums", valueFormatter: (p) => p.value + "일" },
+        numCol("전일고가", { headerTooltip: TIPS["전일고가"] }),
+        { ...numCol("현재가", { headerTooltip: TIPS["현재가"] }),
+          cellClass: (p) => "tabular-nums font-semibold "
+            + (p.data["현재가"] >= p.data["전일고가"] ? "text-up" : "text-down") },
+        { field: "거래량증가율%", headerName: "거래량 증가", headerTooltip: TIPS["거래량 증가"],
+          type: "numericColumn", minWidth: 110, cellClass: "tabular-nums text-up font-semibold",
+          valueFormatter: (p) => "+" + fmt(p.value) + "%" },
+        numCol("매수가", { headerTooltip: TIPS["매수가"] }),
+        { ...numCol("손절가", { headerTooltip: TIPS["손절가"] }),
+          cellClass: "tabular-nums text-down font-semibold" },
+        { field: "손절폭%", headerName: "손절폭", headerTooltip: TIPS["손절폭"], type: "numericColumn",
+          minWidth: 92, cellClass: "tabular-nums text-txt3", valueFormatter: (p) => p.value + "%" },
+      ],
+      onRow: (data, ev) => {
+        if (!StockMenu.fromEvent(ev, data["종목코드"], data["종목명"])) selectSignal(data);
+      },
+    });
+  } else {
+    GRID.setGridOption("rowData", rows);
+  }
 }
 
 function renderWatch() {
   const rows = STATE.watch;
-  $("#view").innerHTML = table(
-    ["종목코드", "종목명", "기준봉일", "경과", "감시 돌파가(전일고가)", "기준봉 저가(손절)", "조정 거래량비"],
-    rows,
-    r => `<td>${tossLink(r, r["종목코드"], "sym")}</td><td>${tossLink(r, r["종목명"])}</td>
-      <td class="muted">${r["기준봉일"].slice(5)}</td>
-      <td class="muted">${r["경과일"]}일</td>
-      <td class="up">${fmt(r["감시_돌파가(전일고가)"])}</td>
-      <td class="down">${fmt(r["기준봉저가(손절)"])}</td>
-      <td>${r["조정거래량비"]}</td>`,
-    true);
-  bindRows(rows, r => selectWatch(r));
+  GRID_ROWS = rows;
+  if (!rows.length) { GRID_KIND = null; $("#view").innerHTML = EMPTY("돌파를 기다리는 종목이 없습니다."); return; }
+  if (GRID_KIND !== "watch") {
+    GRID_KIND = "watch";
+    GRID = Grid.create(gridHost(), {
+      rows, options: { rowClassRules: ROW_CLASS },
+      columns: [
+        { ...stockCol("종목코드", "font-semibold"), headerName: "종목코드" },
+        stockCol("종목명"),
+        { field: "기준봉일", headerTooltip: TIPS["기준봉일"], minWidth: 100,
+          cellClass: "text-txt3 tabular-nums", valueFormatter: (p) => p.value.slice(5) },
+        { field: "경과일", headerName: "경과", headerTooltip: TIPS["경과"], type: "numericColumn",
+          minWidth: 88, cellClass: "text-txt3 tabular-nums", valueFormatter: (p) => p.value + "일" },
+        { ...numCol("감시_돌파가(전일고가)", { headerName: "감시 돌파가(전일고가)", minWidth: 168,
+            headerTooltip: TIPS["감시 돌파가(전일고가)"] }), cellClass: "tabular-nums text-up font-semibold" },
+        { ...numCol("기준봉저가(손절)", { headerName: "기준봉 저가(손절)", minWidth: 148,
+            headerTooltip: TIPS["기준봉 저가(손절)"] }), cellClass: "tabular-nums text-down font-semibold" },
+        { field: "조정거래량비", headerTooltip: TIPS["조정 거래량비"], type: "numericColumn", minWidth: 118 },
+      ],
+      onRow: (data, ev) => {
+        if (!StockMenu.fromEvent(ev, data["종목코드"], data["종목명"])) selectWatch(data);
+      },
+    });
+  } else {
+    GRID.setGridOption("rowData", rows);
+  }
 }
 
-function bindRows(rows, fn) {
-  $("#view").querySelectorAll("tbody tr").forEach(tr =>
-    tr.onclick = () => fn(rows[+tr.dataset.i]));
-}
+/* 선택이 바뀌면 강조 행만 다시 그린다 */
+function repaintRows() { if (GRID) GRID.redrawRows(); }
 
 const CFG_LABEL = {
   bottom_lookback: "바닥권 조회기간(일)", bottom_drawdown_min: "최소 하락률",
@@ -406,31 +337,35 @@ const CFG_LABEL = {
 };
 
 async function renderConfig() {
+  if (GRID) { GRID.destroy(); GRID = null; GRID_KIND = null; }
   if (!CFG) CFG = await (await fetch("/api/config")).json();
   const items = Object.entries(CFG_LABEL).map(([k, label]) => {
     let v = CFG[k];
     if (Array.isArray(v)) v = v.join(", ");
     else if (typeof v === "number" && v >= 1e8) v = (v / 1e8).toFixed(0) + "억";
-    return `<div><dt>${label}</dt><dd>${v}</dd></div>`;
+    return `<div class="flex justify-between gap-3 pb-1.5 border-b border-dashed border-line text-[13px]">
+      <dt class="text-txt2">${label}</dt><dd class="m-0 font-semibold tabular-nums">${v}</dd></div>`;
   }).join("");
-  $("#view").innerHTML = `<dl class="cfg">${items}</dl>`;
+  $("#view").innerHTML = `<div class="bg-s1 border border-line rounded-xl overflow-hidden">
+    <dl class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-y-2 gap-x-5 m-0 p-4">${items}</dl></div>`;
 }
 
 /* ------------------------------------------------------------------ 상세 */
-async function selectSignal(r) { SELECTED = r; renderTab(); await renderDetail(r); }
+async function selectSignal(r) { SELECTED = r; repaintRows(); await renderDetail(r); }
 async function selectWatch(r) {
   SELECTED = { ...r, "매수가": r["감시_돌파가(전일고가)"], "손절가": r["기준봉저가(손절)"], _watch: true };
-  renderTab(); await renderDetail(SELECTED);
+  repaintRows();
+  await renderDetail(SELECTED);
 }
 
 async function renderDetail(r) {
   const d = $("#detail");
-  d.innerHTML = `<div class="detail"><div class="empty">차트 불러오는 중…</div></div>`;
+  d.innerHTML = `<div class="mt-3.5">${EMPTY("차트 불러오는 중…")}</div>`;
   let data;
   try {
     data = await (await fetch(`/api/chart/${r["종목코드"]}?count=60`)).json();
   } catch (e) {
-    d.innerHTML = `<div class="detail"><div class="empty">차트를 불러오지 못했습니다.</div></div>`;
+    d.innerHTML = `<div class="mt-3.5">${EMPTY("차트를 불러오지 못했습니다.")}</div>`;
     return;
   }
   const risk = r["매수가"] - r["손절가"];
@@ -446,22 +381,29 @@ async function renderDetail(r) {
     ["손절폭", r["손절폭%"] + "%"],
     ["목표가 1R/2R/3R", (r["목표가"] || []).map(v => fmt(v)).join(" · ")],
   ];
-  d.innerHTML = `<div class="detail">
-    <div class="detail-head">
-      <h2>${r["종목명"]} <span class="muted">${r["종목코드"]}</span></h2>
-      <a class="toss-btn" href="${tossUrl(r["종목코드"])}" target="_blank" rel="noopener noreferrer">
-        토스증권에서 열기 ↗</a>
-      <span class="badge">${r._watch ? "돌파 대기" : "매수 시그널"}</span>
+  const swatch = (color, extra = "") =>
+    `<i class="inline-block w-2.5 h-2.5 rounded-sm mr-1.5 -mb-px ${extra}" style="background:${color}"></i>`;
+  d.innerHTML = `<div class="mt-3.5 bg-s1 border border-line rounded-xl p-4">
+    <div class="flex flex-wrap items-baseline gap-2.5 mb-1">
+      <h2 class="m-0 text-[17px] font-semibold">${r["종목명"]}
+        <span class="text-txt3 font-normal tabular-nums">${r["종목코드"]}</span></h2>
+      <a class="text-xs px-2.5 py-1 rounded-lg border border-line bg-s2 text-txt2 no-underline
+                hover:border-accent hover:text-accent"
+         href="${tossUrl(r["종목코드"])}" target="_blank" rel="noopener noreferrer">토스증권에서 열기 ↗</a>
+      <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold
+                   bg-s2 text-txt2 border border-line">${r._watch ? "돌파 대기" : "매수 시그널"}</span>
     </div>
     ${scoreBlock(r)}
-    <div class="detail-grid">${stats.map(([k, v]) => `<div>${k}<strong>${v}</strong></div>`).join("")}</div>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-y-2.5 gap-x-4 mt-3.5 mb-1.5">
+      ${stats.map(([k, v]) => `<div class="text-xs text-txt3">${k}
+        <strong class="block text-[15px] text-txt font-semibold tabular-nums">${v}</strong></div>`).join("")}</div>
     ${r._watch ? "" : posCalc(r)}
-    <div class="chart-box" id="chart-box"></div>
-    <div class="legend">
-      <span><i style="background:var(--up)"></i>양봉(상승)</span>
-      <span><i style="background:var(--down)"></i>음봉(하락)</span>
-      <span><i style="background:var(--warning)"></i>기준봉</span>
-      <span><i style="background:var(--text-muted);height:2px;border-radius:0"></i>매수가 / 손절가</span>
+    <div class="relative mt-2.5" id="chart-box"></div>
+    <div class="flex flex-wrap gap-3.5 text-xs text-txt2 mt-2">
+      <span>${swatch("var(--up)")}양봉(상승)</span>
+      <span>${swatch("var(--down)")}음봉(하락)</span>
+      <span>${swatch("var(--warning)")}기준봉</span>
+      <span>${swatch("var(--text-muted)", "!h-0.5 !rounded-none")}매수가 / 손절가</span>
     </div>
   </div>`;
   if (!r._watch) bindPosCalc(r);
@@ -474,24 +416,23 @@ function scoreBlock(r) {
   const items = r["점수상세"] || [];
   if (!items.length) return "";
   const pass = r["점수"] >= ENTRY_CUTOFF;
-  const cls = "g-" + (r["등급"] || "").replace("+", "p");
   const rows = items.map(i => `<tr>
-      <td>${i["항목"]}</td>
-      <td><div class="bar"><i style="width:${i["만점"] ? i["점수"] / i["만점"] * 100 : 0}%"></i></div></td>
-      <td>${i["점수"]} / ${i["만점"]}</td>
-      <td>${i["값"]} — ${i["설명"]}</td></tr>`).join("");
-  return `<div class="detail-grid" style="grid-template-columns:1fr">
-      <div>진입 점수
-        <strong class="score"><b style="font-size:30px">${r["점수"]}</b>
-          <span class="muted" style="font-size:13px">/ 100</span>
-          <span class="g ${cls}">${r["등급"]}</span>
-          <span class="muted" style="font-size:13px">${r["판단"]}</span></strong>
-        <div class="muted" style="margin-top:4px;font-size:12px">
-          실전 컷오프 ${ENTRY_CUTOFF}점 — ${pass
-            ? "충족 (실측 A 60.0% / A+ 69.1% 승률)"
-            : "미달 (65~74점 구간 실측 승률 50.1%, 평균 −0.048R)"}</div>
-      </div></div>
-    <table class="breakdown"><tbody>${rows}</tbody></table>`;
+      <td class="py-1 pr-2 text-txt2 w-[110px]">${i["항목"]}</td>
+      <td class="py-1 pr-2 w-[90px]">${scoreBar(i["만점"] ? i["점수"] / i["만점"] * 100 : 0)}</td>
+      <td class="py-1 pr-2 w-[70px] font-semibold tabular-nums">${i["점수"]} / ${i["만점"]}</td>
+      <td class="py-1 text-txt3 text-xs">${i["값"]} — ${i["설명"]}</td></tr>`).join("");
+  return `<div class="text-xs text-txt3 mt-1">진입 점수
+      <strong class="flex items-baseline gap-1.5 tabular-nums">
+        <b class="text-[30px] font-bold text-txt">${r["점수"]}</b>
+        <span class="text-txt3 text-[13px] font-normal">/ 100</span>
+        ${gradeBadge(r["등급"])}
+        <span class="text-txt3 text-[13px] font-normal">${r["판단"]}</span></strong>
+      <div class="mt-1 text-xs ${pass ? "text-good" : "text-txt3"}">
+        실전 컷오프 ${ENTRY_CUTOFF}점 — ${pass
+          ? "충족 (실측 A 60.0% / A+ 69.1% 승률)"
+          : "미달 (65~74점 구간 실측 승률 50.1%, 평균 −0.048R)"}</div>
+    </div>
+    <table class="w-full mt-1"><tbody>${rows}</tbody></table>`;
 }
 
 
@@ -500,30 +441,37 @@ let GUIDE = null;
 
 // 서술형 컬럼은 좌측 정렬한다 (숫자 컬럼만 우측 정렬)
 const WIDE = new Set(["구간별 점수", "조건"]);
-const tbl = (cols, rows, rowFn) => `<div class="table-scroll"><table>
-  <thead><tr>${cols.map(c => `<th${WIDE.has(c) ? ' class="l"' : ""}>${c}</th>`).join("")}</tr></thead>
+const TH = "px-3 py-2 text-right text-xs font-semibold text-txt3 bg-s2 whitespace-nowrap";
+const tbl = (cols, rows, rowFn) => `<div class="overflow-x-auto border border-line rounded-xl my-2">
+  <table class="w-full border-collapse tabular-nums [&_td]:px-3 [&_td]:py-2 [&_td]:text-right
+                [&_td]:border-t [&_td]:border-line [&_tr>td:first-child]:text-left">
+  <thead><tr>${cols.map(c => `<th class="${TH}${WIDE.has(c) ? " !text-left" : ""}">${c}</th>`).join("")}</tr></thead>
   <tbody>${rows.map(rowFn).join("")}</tbody></table></div>`;
 
 const pick = (v) => v == null ? "–" : (v > 0 ? "+" : "") + Number(v).toFixed(3) + "R";
-const rc = (v) => v == null ? "" : (v > 0 ? "up" : "down");
+const rc = (v) => v == null ? "" : (v > 0 ? "text-up font-semibold" : "text-down font-semibold");
 
 async function renderGuide() {
+  if (GRID) { GRID.destroy(); GRID = null; GRID_KIND = null; }
   if (!GUIDE) GUIDE = await (await fetch("/api/guide")).json();
   const g = GUIDE;
 
-  const steps = `<div class="steps">${g["단계"].map(s => `<div class="step">
-      <div class="n">${s["단계"]}</div><h4>${s["이름"]}</h4>
-      <p>${s["설명"]}</p>
-      <ul>${s["조건"].map(c => `<li>${c}</li>`).join("")}</ul></div>`).join("")}</div>`;
+  const steps = `<div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
+    ${g["단계"].map(s => `<div class="bg-s2 rounded-[10px] px-4 py-3.5">
+      <div class="text-[11px] font-bold text-accent tracking-wider">${s["단계"]}</div>
+      <h4 class="mt-1 mb-1.5 text-[15px] font-semibold">${s["이름"]}</h4>
+      <p class="text-[13px] mb-2 text-txt2">${s["설명"]}</p>
+      <ul class="m-0 pl-4 text-[12.5px] text-txt2 list-disc">
+        ${s["조건"].map(c => `<li class="mb-0.5">${c}</li>`).join("")}</ul></div>`).join("")}</div>`;
 
   const factors = tbl(["요인", "배점", "구간별 점수"], g["요인"], f => `<tr>
       <td>${f["항목"]}</td><td>${f["배점"]}점</td>
-      <td class="l">${f["구간"]
+      <td class="!text-left">${f["구간"]
         .map(b => `${b["설명"]} <b>${b["점수"]}점</b>`).join(" · ")}</td></tr>`);
 
   const grades = tbl(["등급", "점수 구간", "과거 거래수", "승률", "평균 손익"],
     g["등급성과"], r => `<tr>
-      <td><span class="g g-${r["등급"].replace("+", "p")}">${r["등급"]}</span></td>
+      <td>${gradeBadge(r["등급"])}</td>
       <td>${r["구간"]}</td><td>${fmt(r["거래수"])}건</td>
       <td>${Number(r["승률"]).toFixed(1)}%</td><td class="${rc(r["평균R"])}">${pick(r["평균R"])}</td></tr>`);
 
@@ -531,7 +479,7 @@ async function renderGuide() {
   const profiles = tbl(["프로파일", "조건", "거래수", "승률", "평균 손익", "수익팩터", "최대낙폭"],
     g["프로파일"], r => `<tr>
       <td>${r["채택"] ? "✅ " : ""}${r["이름"]}</td>
-      <td class="l">${r["조건"]}</td>
+      <td class="!text-left">${r["조건"]}</td>
       <td>${fmt(r["거래수"])}</td><td>${Number(r["승률"]).toFixed(1)}%</td>
       <td class="${rc(r["평균R"])}">${pick(r["평균R"])}</td>
       <td>${r["수익팩터"]}</td><td>${r["MDD"]}R</td></tr>`);
@@ -552,51 +500,55 @@ async function renderGuide() {
   const exits = Object.entries(g["청산규칙"])
     .map(([k, v]) => `<li><b>${k}</b> — ${v}</li>`).join("");
 
-  $("#view").innerHTML = `<div class="guide">
-    <h3>1. 이 전략은 무엇인가</h3>
+  const CALLOUT = "border-l-[3px] bg-s2 px-4 py-3 rounded-r-lg my-3 text-[13px]";
+  const H3 = "text-[15px] font-semibold mt-6 mb-2.5 pb-1.5 border-b border-line first:mt-0";
+  $("#view").innerHTML = `<div class="bg-s1 border border-line rounded-xl px-5 py-5 leading-[1.75]
+      [&_p]:mb-2.5 [&_p]:text-txt2 [&_code]:bg-s2 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded
+      [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1">
+    <h3 class="${H3}">1. 이 전략은 무엇인가</h3>
     <p>바닥권에서 <b>세력이 물량을 매집한 흔적(기준봉)</b>을 찾고, 매물이 소화되길 기다렸다가
        <b>전일 고가를 거래량과 함께 돌파하는 순간</b>에 진입합니다. 3단계로 판정합니다.</p>
     ${steps}
 
-    <h3>2. 점수는 어떻게 매기나 — 100점 만점</h3>
+    <h3 class="${H3}">2. 점수는 어떻게 매기나 — 100점 만점</h3>
     <p>배점은 임의로 정한 게 아니라 <b>${g["표본"]["기간"]} ${fmt(g["표본"]["종목수"])}종목
        ${fmt(g["표본"]["봉수"])}봉 백테스트에서 구간별로 실제 측정한 평균 손익</b>에 맞춰 역산했습니다.
        R은 손절폭 1회분을 1로 본 단위입니다 — <code>+1R</code>은 손절할 뻔한 금액만큼 벌었다는 뜻입니다.</p>
     ${factors}
-    <div class="callout warn"><b>주의: 클수록 좋은 게 아닙니다</b>
+    <div class="${CALLOUT} border-warn"><b>주의: 클수록 좋은 게 아닙니다</b>
       조정 거래량비는 0.10~0.20이 가장 좋고(+0.315R) 0.10 미만은 오히려 떨어집니다(+0.111R).
       거래량도 50~100배가 최고고 100배를 넘으면 꺾입니다. 실측 곡선을 그대로 반영했습니다.</div>
 
-    <h3>3. 몇 점부터 사도 되나 — 컷오프 ${g["컷오프점수"]}점</h3>
+    <h3 class="${H3}">3. 몇 점부터 사도 되나 — 컷오프 ${g["컷오프점수"]}점</h3>
     <p>과거 거래를 이 점수로 사후 채점한 결과입니다.</p>
     ${grades}
-    <div class="callout"><b>${cut["컷오프"]}점 이상만 매매했다면</b>
+    <div class="${CALLOUT} border-accent"><b>${cut["컷오프"]}점 이상만 매매했다면</b>
       ${fmt(cut["거래수"])}건 · 승률 ${cut["승률"]}% · 평균 ${pick(cut["평균R"])} · 누적 ${cut["총R"]}R.
       <b style="display:inline">B등급(65~74점)은 승률 50.1%에 평균 −0.048R로 적자</b>였습니다 —
       점수가 아깝다고 진입하지 마세요.</div>
 
-    <h3>4. 얼마를 넣어야 하나 — 포지션 계산</h3>
+    <h3 class="${H3}">4. 얼마를 넣어야 하나 — 포지션 계산</h3>
     <p>${g["포지션"]["설명"]}</p>
-    <div class="callout"><b>${g["포지션"]["공식"]}</b>
+    <div class="${CALLOUT} border-accent"><b>${g["포지션"]["공식"]}</b>
       ${g["포지션"]["권장"].map(v => `• ${v}`).join("<br>")}</div>
-    <p class="muted">시그널 행을 클릭하면 상세 패널에서 <b>계좌 잔고를 넣어 투입금액을 바로 계산</b>할 수 있습니다.</p>
+    <p class="!text-txt3">시그널 행을 클릭하면 상세 패널에서 <b>계좌 잔고를 넣어 투입금액을 바로 계산</b>할 수 있습니다.</p>
 
-    <h3>5. 언제 파나 — 청산 규칙</h3>
+    <h3 class="${H3}">5. 언제 파나 — 청산 규칙</h3>
     <p>아래는 백테스트에 쓴 규칙 그대로입니다. 살 때 미리 정해두고 기계적으로 지키는 게 핵심입니다.</p>
     <ul>${exits}</ul>
 
-    <h3>6. 왜 이 설정인가 — 검증 기록</h3>
+    <h3 class="${H3}">6. 왜 이 설정인가 — 검증 기록</h3>
     <p><b>전략 프로파일</b> — 원본 스펙 그대로는 3년 기준 손실이었습니다.</p>
     ${profiles}
-    <p style="margin-top:14px"><b>손절 기준</b> — 타이트하게 잡으면 휩쏘에 털립니다(평균 보유 2.2일).</p>
+    <p class="mt-3.5"><b>손절 기준</b> — 타이트하게 잡으면 휩쏘에 털립니다(평균 보유 2.2일).</p>
     ${stops}
-    <p style="margin-top:14px"><b>시장 국면 필터</b> — 가장 효과가 컸습니다. 이동평균 값을 5·10·20·60 어떻게 바꿔도
+    <p class="mt-3.5"><b>시장 국면 필터</b> — 가장 효과가 컸습니다. 이동평균 값을 5·10·20·60 어떻게 바꿔도
        같은 방향이라 특정 값에 끼워맞춘 결과가 아닙니다.</p>
     ${regimes}
 
-    <h3>7. 반드시 알아야 할 한계</h3>
-    ${g["주의"].map(c => `<div class="callout bad">${c}</div>`).join("")}
-    <p class="muted" style="margin-top:16px">측정일 ${g["측정일"]} ·
+    <h3 class="${H3}">7. 반드시 알아야 할 한계</h3>
+    ${g["주의"].map(c => `<div class="${CALLOUT} border-bad">${c}</div>`).join("")}
+    <p class="!text-txt3 mt-4">측정일 ${g["측정일"]} ·
       표본 ${g["표본"]["기간"]} ${fmt(g["표본"]["종목수"])}종목 ${fmt(g["표본"]["봉수"])}봉</p>
   </div>`;
 }
@@ -610,20 +562,22 @@ function posCalc(r) {
     bal = Number(localStorage.getItem("balance")) || bal;
     pct = Number(localStorage.getItem("riskPct")) || pct;
   } catch (e) {}
-  return `<div class="pos">
-    <div class="pos-row">
-      <div><label>계좌 잔고 (원)</label><input id="pc-bal" type="number" step="1000000" value="${bal}"></div>
-      <div><label>1회 허용 손실</label>
-        <select id="pc-pct">${[0.5, 1, 1.5, 2].map(v =>
+  const FIELD = "font-sans text-sm px-2.5 py-1.5 rounded-lg border border-line bg-s1 text-txt " +
+                "w-[150px] tabular-nums";
+  return `<div class="bg-s2 rounded-[10px] px-4 py-3.5 mt-3">
+    <div class="flex flex-wrap gap-3 items-end">
+      <div><label class="block text-xs text-txt3 mb-1">계좌 잔고 (원)</label>
+        <input class="${FIELD}" id="pc-bal" type="number" step="1000000" value="${bal}"></div>
+      <div><label class="block text-xs text-txt3 mb-1">1회 허용 손실</label>
+        <select class="${FIELD}" id="pc-pct">${[0.5, 1, 1.5, 2].map(v =>
           `<option value="${v}" ${v === pct ? "selected" : ""}>${v}%</option>`).join("")}</select></div>
-      <div class="muted" style="font-size:12px;padding-bottom:8px">
-        투입금액 = (잔고 × 허용 손실) ÷ 손절폭 ${r["손절폭%"]}%</div>
+      <div class="text-xs text-txt3 pb-2">투입금액 = (잔고 × 허용 손실) ÷ 손절폭 ${r["손절폭%"]}%</div>
     </div>
-    <div class="pos-out" id="pc-out"></div>
-    <div class="order-bar">
-      <button id="od-dry">모의 주문 확인</button>
-      <button class="primary danger" id="od-live">토스 매수 주문</button>
-      <span class="muted" id="od-mode" style="font-size:12px"></span>
+    <div class="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-y-2 gap-x-4 mt-3" id="pc-out"></div>
+    <div class="flex flex-wrap items-center gap-2.5 mt-3.5 pt-3 border-t border-line">
+      <button class="${UI.cls.btn}" id="od-dry">모의 주문 확인</button>
+      <button class="${UI.cls.btnDanger}" id="od-live">토스 매수 주문</button>
+      <span class="text-xs text-txt3" id="od-mode"></span>
     </div>
     <div id="od-result"></div>
   </div>`;
@@ -640,12 +594,13 @@ function bindPosCalc(r) {
     const shares = Math.floor(amount / r["매수가"]);
     const invested = shares * r["매수가"];
     const t = (r["목표가"] || [])[0];
+    const OUT = "block text-[17px] font-semibold tabular-nums text-txt";
     out.innerHTML = `
-      <div>매수 수량<strong>${fmt(shares)}주</strong></div>
-      <div>투입 금액<strong>${fmt(invested)}원</strong></div>
-      <div>손절 시 손실<strong class="down">−${fmt(shares * (r["매수가"] - r["손절가"]))}원</strong></div>
-      <div>1R 도달 시<strong class="up">+${fmt(t ? shares * (t - r["매수가"]) : 0)}원</strong></div>
-      <div>계좌 대비 비중<strong>${b ? (invested / b * 100).toFixed(1) : 0}%</strong></div>`;
+      <div class="text-xs text-txt3">매수 수량<strong class="${OUT}">${fmt(shares)}주</strong></div>
+      <div class="text-xs text-txt3">투입 금액<strong class="${OUT}">${fmt(invested)}원</strong></div>
+      <div class="text-xs text-txt3">손절 시 손실<strong class="${OUT} !text-down">−${fmt(shares * (r["매수가"] - r["손절가"]))}원</strong></div>
+      <div class="text-xs text-txt3">1R 도달 시<strong class="${OUT} !text-up">+${fmt(t ? shares * (t - r["매수가"]) : 0)}원</strong></div>
+      <div class="text-xs text-txt3">계좌 대비 비중<strong class="${OUT}">${b ? (invested / b * 100).toFixed(1) : 0}%</strong></div>`;
     try {
       localStorage.setItem("balance", String(b));
       localStorage.setItem("riskPct", String(p));
@@ -697,11 +652,13 @@ async function bindOrder(r, getShares) {
       <br>실주문은 <code>TOSS_TRADING_ENABLED=true</code> 설정 후 재시작해야 열립니다.`;
   } else {
     liveBtn.disabled = false;
-    mode.innerHTML = `<b class="down">실거래 ON</b> · ${acct} ·
+    mode.innerHTML = `<b class="text-down">실거래 ON</b> · ${acct} ·
       1회 한도 ${fmt(t.max_order_amount)}원`;
   }
 
-  const show = (html, kind = "") => { box.innerHTML = `<div class="od ${kind}">${html}</div>`; };
+  const OD = { good: "border-good tint-good", bad: "border-bad tint-bad", "": "border-line bg-s1" };
+  const show = (html, kind = "") =>
+    { box.innerHTML = `<div class="mt-3 px-3.5 py-3 rounded-[10px] text-[13px] border ${OD[kind]}">${html}</div>`; };
 
   const send = async (dryRun) => {
     const shares = getShares();
@@ -720,9 +677,9 @@ async function bindOrder(r, getShares) {
       const steps = (data.steps || []).map(s =>
         `<li><b>${s["단계"]}</b> — ${s["상태"]} · ${s["내용"]}</li>`).join("");
       show(`<b>${data.dry_run ? "🧪 모의 실행 결과" : "✅ 주문 접수"}</b>
-        <div class="muted" style="margin:4px 0 8px">${data.message}</div>
-        <ul>${steps}</ul>
-        <div class="muted" style="font-size:12px">
+        <div class="text-txt3 my-1 mb-2">${data.message}</div>
+        <ul class="m-0 pl-5 list-disc">${steps}</ul>
+        <div class="text-txt3 text-xs">
           호가 정렬 후 — 매수 ${fmt(p.entry)} · 손절 ${fmt(p.stop)} · 익절 ${fmt(p.target)} ·
           ${fmt(p.quantity)}주 · 투입 ${fmt(p.amount)}원 ·
           최대 손실 −${fmt(p.risk_amount)}원 / 익절 시 +${fmt(p.reward_amount)}원</div>`,
@@ -799,7 +756,7 @@ function drawChart(candles, r) {
   ).join("");
 
   box.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" role="img"
+    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img"
          aria-label="${r["종목명"]} 최근 ${n}일 일봉 캔들과 거래량. 기준봉 ${baseDate} 강조.">
       ${gridEls.join("")}
       <text x="${PL + 2}" y="${PT + PRICE_H + GAP + 6}" fill="var(--text-muted)" font-size="11">거래량</text>
@@ -810,7 +767,9 @@ function drawChart(candles, r) {
       <rect id="hit" x="${PL}" y="0" width="${W - PL - PR}" height="${H}" fill="transparent"/>
       <line id="cross" x1="0" y1="${PT}" x2="0" y2="${PT + PRICE_H + GAP + VOL_H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
     </svg>
-    <div class="tooltip" id="tip"></div>`;
+    <div id="tip" class="absolute pointer-events-none opacity-0 transition-opacity duration-100
+         bg-s2 border border-line rounded-lg px-2.5 py-2 text-xs leading-relaxed whitespace-nowrap
+         shadow-lg tabular-nums z-[5] [&_b]:block [&_b]:mb-0.5"></div>`;
 
   const svg = box.querySelector("svg"), tip = $("#tip"), cross = box.querySelector("#cross");
   svg.addEventListener("mousemove", ev => {

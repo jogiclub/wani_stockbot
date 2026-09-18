@@ -45,7 +45,8 @@ class ScanService:
 
     def __init__(self, screener: Screener, interval: int = 300, top: int = 200,
                  limit: int | None = None, live: bool = False,
-                 notifier: Notifier | None = None, with_watch: bool = True):
+                 notifier: Notifier | None = None, with_watch: bool = True,
+                 auto_buyer=None):
         self.screener = screener
         self.interval = interval
         self.top = top
@@ -53,6 +54,7 @@ class ScanService:
         self.live = live
         self.notifier = notifier
         self.with_watch = with_watch
+        self.auto_buyer = auto_buyer            # screener.autobuy.AutoBuyer (세션별, 선택)
         self.state = ScanState()
         self._lock = threading.Lock()
         self._stop = threading.Event()
@@ -79,7 +81,10 @@ class ScanService:
 
             symbols = self._symbols()
             report = self.screener.scan(limit=self.limit, symbols=symbols, live=self.live)
-            watch = self.screener.watch_candidates(limit=self.limit, symbols=symbols) \
+            # 이미 돌파(시그널)했거나 유의종목으로 걸러진 종목은 '대기' 가 아니다
+            done = {s.symbol for s in report.signals} | {b["종목코드"] for b in report.blocked}
+            watch = self.screener.watch_candidates(limit=self.limit, symbols=symbols,
+                                                   exclude=done) \
                 if self.with_watch else []
 
             self.state.signals = [s.to_dict() for s in report.signals]
@@ -95,6 +100,11 @@ class ScanService:
 
             if self.notifier and report.signals:
                 self.notifier.send(report.signals)
+            if self.auto_buyer and report.signals:
+                try:
+                    self.auto_buyer.handle(report.signals)
+                except Exception:
+                    log.exception("자동매수 처리 실패")
         except Exception as exc:
             self.state.error = f"{type(exc).__name__}: {exc}"
             self.state.finished_at = _now()

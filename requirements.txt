@@ -3,6 +3,7 @@ requests>=2.31
 python-dotenv>=1.0
 fastapi>=0.110
 uvicorn[standard]>=0.27
+cryptography>=42   # 저장된 자격증명 암호화 (screener/store.py)
 # 테스트 전용
 # pytest>=8.0
 # httpx>=0.27

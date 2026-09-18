@@ -350,3 +350,34 @@ def test_endpoints_503_without_bot():
         assert c.get("/api/bollinger/state").json()["configured"] is False
         assert c.post("/api/bollinger/start").status_code == 503
         assert c.post("/api/bollinger/config", json={}).status_code == 503
+
+
+def test_add_symbol_appends_without_touching_other_settings(client):
+    client.post("/api/bollinger/config",
+                json={"symbols": "005930", "stop_loss_pct": 0.03, "interval": "30m"})
+    r = client.post("/api/bollinger/symbols", json={"symbol": "100130"})
+    assert r.status_code == 200
+    assert r.json()["added"] is True
+    assert r.json()["symbols"] == ["005930", "100130"]
+    cfg = client.get("/api/bollinger/state").json()["config"]
+    assert cfg["symbols"] == ["005930", "100130"]
+    assert cfg["stop_loss_pct"] == 0.03 and cfg["interval"] == "30m"   # 다른 설정 보존
+
+
+def test_add_symbol_is_idempotent(client):
+    client.post("/api/bollinger/config", json={"symbols": "005930"})
+    r = client.post("/api/bollinger/symbols", json={"symbol": "005930"})
+    assert r.json()["added"] is False
+    assert r.json()["symbols"] == ["005930"]
+
+
+@pytest.mark.parametrize("bad", ["", "5930", "00593A", "0059300", None])
+def test_add_symbol_rejects_bad_code(client, bad):
+    assert client.post("/api/bollinger/symbols", json={"symbol": bad}).status_code == 400
+
+
+def test_add_symbol_without_bot_is_503():
+    app = create_app(SyntheticDataLoader(n_symbols=1), StrategyConfig.tuned(),
+                     interval=9999, top=0, bollinger=None)
+    with TestClient(app) as c:
+        assert c.post("/api/bollinger/symbols", json={"symbol": "005930"}).status_code == 503

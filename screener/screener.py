@@ -223,10 +223,22 @@ class Screener:
 
     # ------------------------------------------------------------ 관심종목 감시
     def watch_candidates(self, limit: int | None = None,
-                         symbols: list[str] | None = None) -> list[dict]:
-        """아직 돌파 전이지만 STEP 1+2 를 통과한 '대기' 종목 목록."""
+                         symbols: list[str] | None = None,
+                         exclude: set[str] | frozenset[str] = frozenset()) -> list[dict]:
+        """아직 돌파 전이지만 STEP 1+2 를 통과한 '대기' 종목 목록.
+
+        STEP 3(돌파)는 보지 않으므로 오늘 이미 시그널이 뜬 종목도 걸린다.
+        매수 시그널과 겹치지 않게 그런 종목은 `exclude` 로 넘겨 뺀다.
+
+        판정 기준은 `detect` 와 같다 — 마지막 봉을 '돌파 판정일' 로 두고
+        그 전날까지를 조정 구간으로 본다. 그래서 감시 돌파가는 마지막 봉의
+        **전일 고가**(`prev_high`)다. 마지막 봉 자신의 고가를 쓰면 시그널의
+        전일고가와 값이 어긋난다 (실제로 겪은 혼동).
+        """
         out: list[dict] = []
         for meta in self.build_universe(limit, symbols):
+            if meta.symbol in exclude:
+                continue
             try:
                 df = self.loader.ohlcv(meta.symbol, count=max(self.cfg.min_history + 40, 260))
                 if len(df) < self.cfg.min_history:
@@ -243,9 +255,10 @@ class Screener:
                     continue
                 out.append({
                     "종목코드": meta.symbol, "종목명": meta.name,
+                    "판정일": data.index[-1].strftime("%Y-%m-%d"),
                     "기준봉일": base.date.strftime("%Y-%m-%d"),
                     "경과일": base.bars_since,
-                    "감시_돌파가(전일고가)": round(float(data["high"].iloc[-1]), 2),
+                    "감시_돌파가(전일고가)": round(float(data["prev_high"].iloc[-1]), 2),
                     "기준봉저가(손절)": round(base.low, 2),
                     "조정거래량비": round(ratio, 2),
                 })

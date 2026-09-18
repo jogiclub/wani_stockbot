@@ -25,8 +25,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .autobuy import AutoBuyer
 from .bollinger import BollingerConfig
 from .bollinger_bot import BollingerBot
+from .supply import SupplyConfig, SupplyScanner, SupplyService
 from .config import StrategyConfig
 from .data_loader import TossDataLoader
 from .notifier import DedupeNotifier, TelegramNotifier
@@ -61,6 +63,11 @@ class SessionSettings:
     trading_opt_in: bool = False          # 서버가 실거래를 허용할 때만 의미가 있다
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    # 세력추정매매 자동 매수 — 점수 컷오프 이상 시그널을 금액 안에서 최대 수량으로 산다.
+    # 실주문은 trading_opt_in(+서버 스위치)일 때만, 아니면 모의로 기록만 한다.
+    auto_buy: bool = False
+    auto_buy_score: int = 75
+    auto_buy_amount: int = 0
 
     @classmethod
     def from_body(cls, body: dict, *, defaults: "SessionSettings | None" = None) -> "SessionSettings":
@@ -84,9 +91,15 @@ class SessionSettings:
             account_seq=(_int(body.get("account_seq"), 0, lo=0, hi=10**12) or None),
             max_order_amount=float(_int(body.get("max_order_amount"),
                                         int(d.max_order_amount), lo=0, hi=10**10)),
-            trading_opt_in=bool(body.get("trading_opt_in", False)),
-            telegram_bot_token=str(body.get("telegram_bot_token", "")).strip()[:200],
-            telegram_chat_id=str(body.get("telegram_chat_id", "")).strip()[:64],
+            trading_opt_in=bool(body.get("trading_opt_in", d.trading_opt_in)),
+            telegram_bot_token=str(body.get("telegram_bot_token",
+                                             d.telegram_bot_token)).strip()[:200],
+            telegram_chat_id=str(body.get("telegram_chat_id",
+                                          d.telegram_chat_id)).strip()[:64],
+            auto_buy=bool(body.get("auto_buy", d.auto_buy)),
+            auto_buy_score=_int(body.get("auto_buy_score"), d.auto_buy_score, lo=0, hi=100),
+            auto_buy_amount=_int(body.get("auto_buy_amount"), d.auto_buy_amount,
+                                 lo=0, hi=10**10),
         )
 
 
@@ -117,6 +130,11 @@ class UserSession:
     service: ScanService
     trading: TradingService | None = None
     bollinger: BollingerBot | None = None
+    supply: SupplyService | None = None
+    # 이 세션을 만든 로그인 사용자. 로그인을 안 쓰는 서버면 None.
+    # 웹은 쿠키의 세션이라도 owner 가 현재 로그인 사용자와 다르면 **쓰지 않는다**
+    # (같은 브라우저에서 계정을 바꿔 로그인했을 때 남의 키·계좌로 주문하는 사고 방지).
+    owner: str | None = None
     created_at: float = field(default_factory=time.time)
     last_seen: float = field(default_factory=time.time)
 
@@ -127,6 +145,8 @@ class UserSession:
         self.service.stop()
         if self.bollinger is not None:
             self.bollinger.stop()
+        if self.supply is not None:
+            self.supply.stop()
 
     def info(self) -> dict:
         """화면에 돌려줄 정보. **secret 은 절대 포함하지 않는다.**"""
@@ -140,9 +160,20 @@ class UserSession:
             "max_order_amount": s.max_order_amount,
             "trading_opt_in": s.trading_opt_in,
             "telegram": bool(s.telegram_bot_token and s.telegram_chat_id),
+            "auto_buy": s.auto_buy,
+            "auto_buy_score": s.auto_buy_score,
+            "auto_buy_amount": s.auto_buy_amount,
+            "auto_buy_live": bool(self.service.auto_buyer and self.trading
+                                  and self.trading.enabled),
             "bollinger_running": bool(self.bollinger and self.bollinger.state.running),
             "created_at": int(self.created_at),
         }
+
+    def idle(self, now: float, ttl: float) -> bool:
+        """유휴 폐기 대상인가. 자동매매 봇이 도는 세션은 화면을 안 봐도 살려 둔다."""
+        if self.bollinger is not None and self.bollinger.state.running:
+            return False
+        return now - self.last_seen > ttl
 
 
 class SessionManager:
@@ -156,6 +187,7 @@ class SessionManager:
                  bollinger_log: Path | None = None,
                  idle_ttl: float = DEFAULT_IDLE_TTL,
                  max_sessions: int = DEFAULT_MAX_SESSIONS,
+                 supply_interval: int = 60,
                  client_factory=TossClient):
         self.cfg = cfg
         self.cache_dir = Path(cache_dir)
@@ -167,6 +199,7 @@ class SessionManager:
         self.bollinger_log = Path(bollinger_log) if bollinger_log else None
         self.idle_ttl = idle_ttl
         self.max_sessions = max_sessions
+        self.supply_interval = supply_interval
         self._client_factory = client_factory
         self._sessions: dict[str, UserSession] = {}
         self._lock = threading.Lock()
@@ -179,7 +212,7 @@ class SessionManager:
             sess = self._sessions.get(sid)
         if sess is None:
             return None
-        if time.time() - sess.last_seen > self.idle_ttl:
+        if sess.idle(time.time(), self.idle_ttl):
             self.drop(sid)
             return None
         sess.touch()
@@ -200,8 +233,7 @@ class SessionManager:
         """유휴 세션 정리."""
         now = time.time()
         with self._lock:
-            stale = [sid for sid, s in self._sessions.items()
-                     if now - s.last_seen > self.idle_ttl]
+            stale = [sid for sid, s in self._sessions.items() if s.idle(now, self.idle_ttl)]
             dropped = [self._sessions.pop(sid) for sid in stale]
         for sess in dropped:
             sess.close()
@@ -213,7 +245,18 @@ class SessionManager:
             sess.close()
 
     # ------------------------------------------------------------- 생성
-    def create(self, settings: SessionSettings) -> UserSession:
+    def log_paths(self, owner: str | None) -> tuple[Path | None, Path | None]:
+        """(주문 로그, 볼린저 로그). 로그인 사용자면 `<로그 폴더>/users/<아이디>/` 로 분리한다."""
+        if not owner:
+            return self.order_log, self.bollinger_log
+        safe = re.sub(r"[^A-Za-z0-9_.\-]", "_", owner).lstrip(".") or "_"
+        order = (self.order_log.parent / "users" / safe / self.order_log.name
+                 if self.order_log else None)
+        bb = (self.bollinger_log.parent / "users" / safe / self.bollinger_log.name
+              if self.bollinger_log else None)
+        return order, bb
+
+    def create(self, settings: SessionSettings, *, owner: str | None = None) -> UserSession:
         """자격증명을 검증하고 세션을 만든다. 기존 동일 세션은 호출부에서 먼저 drop 한다."""
         self.sweep()
         with self._lock:
@@ -227,6 +270,7 @@ class SessionManager:
             token_cache=token_cache_path(self.cache_dir, settings.client_id))
         self._verify(client)
 
+        order_log, bollinger_log = self.log_paths(owner)
         loader = TossDataLoader(client, markets=self.cfg.markets,
                                 cache_dir=self.cache_dir, cache_ttl=self.cache_ttl)
         telegram = None
@@ -244,23 +288,35 @@ class SessionManager:
             enabled=self.trading_enabled and settings.trading_opt_in,
             max_order_amount=min(settings.max_order_amount, self.max_order_amount),
             account_seq=settings.account_seq,
-            log_path=self.order_log,
+            log_path=order_log,
         )
+
+        if settings.auto_buy and settings.auto_buy_amount > 0:
+            service.auto_buyer = AutoBuyer(
+                trading, min_score=settings.auto_buy_score, amount=settings.auto_buy_amount,
+                notify=telegram.send_text if telegram else None)
 
         # 볼린저 봇은 만들어만 두고 **자동 시작하지 않는다** — 주문을 내는 루프라
         # 사용자가 화면에서 명시적으로 시작해야 한다.
         bot = BollingerBot(client, trading, BollingerConfig(),
                            notify=telegram.send_text if telegram else None,
-                           log_path=self.bollinger_log)
+                           log_path=bollinger_log)
+
+        # 수급 포착 매매 — 시세만 보므로 주문과 무관하다. 장중에만 촘촘히 돈다.
+        supply = SupplyService(SupplyScanner(loader, SupplyConfig(), max_workers=self.workers),
+                               interval=self.supply_interval,
+                               notify=telegram.send_text if telegram else None)
 
         sess = UserSession(sid=secrets.token_urlsafe(24), settings=settings,
                            client=client, service=service, trading=trading,
-                           bollinger=bot)
+                           bollinger=bot, supply=supply, owner=owner)
         with self._lock:
             self._sessions[sess.sid] = sess
         service.start()
-        log.info("세션 시작 (%s, 상위 %d종목 · %d초 주기)",
-                 mask(settings.client_id), settings.top, settings.interval)
+        supply.start()
+        log.info("세션 시작 (%s%s, 상위 %d종목 · %d초 주기)",
+                 mask(settings.client_id), f" · {owner}" if owner else "",
+                 settings.top, settings.interval)
         return sess
 
     # ------------------------------------------------------------- 내부

@@ -5,6 +5,7 @@ from __future__ import annotations
 import abc
 import json
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -13,6 +14,10 @@ import requests
 from .pattern_detector import Signal
 
 log = logging.getLogger(__name__)
+
+
+class TelegramError(RuntimeError):
+    """텔레그램 설정·전송 실패. 메시지는 화면에 그대로 보여줄 한국어 안내다."""
 
 
 class Notifier(abc.ABC):
@@ -73,6 +78,44 @@ class TelegramNotifier(Notifier):
                 f"· 매수 {s.entry:,.0f} / 손절 {s.stop:,.0f} ({s.risk_pct:.1f}%)\n"
                 f"· 목표 {' / '.join(f'{t:,.0f}' for t in s.targets)}")
 
+    # 설정 창의 "테스트 전송" 이 쓰는 검증 경로.
+    # 흔한 실수가 **토큰을 콜론에서 쪼개 Chat ID 칸에 넣는 것**이라 형식부터 잡아준다.
+    TEST_TEXT = ("\u2705 <b>왔니 주식</b> 텔레그램 연결 테스트\n"
+                 "이 메시지가 보이면 알림 설정이 정상입니다.")
+
+    def check(self) -> str:
+        """테스트 메시지를 1건 보낸다. 성공하면 대화방 표시명, 실패하면 TelegramError."""
+        token, chat = self.bot_token.strip(), self.chat_id.strip()
+        if not token or not chat:
+            raise TelegramError("Bot Token 과 Chat ID 를 모두 입력하세요.")
+        if not re.fullmatch(r"\d{5,}:[\w-]{20,}", token):
+            raise TelegramError(
+                "Bot Token 형식이 올바르지 않습니다. BotFather 가 준 "
+                "123456789:AA… 전체를 콜론까지 포함해 넣으세요.")
+        if not re.fullmatch(r"-?\d{1,20}|@\w{4,64}", chat):
+            raise TelegramError(
+                "Chat ID 는 숫자(그룹이면 -100… )이거나 @채널명 이어야 합니다. "
+                "봇 토큰의 일부를 넣지 마세요.")
+        try:
+            r = requests.post(f"https://api.telegram.org/bot{token}/sendMessage",
+                              json={"chat_id": chat, "text": self.TEST_TEXT,
+                                    "parse_mode": "HTML", "disable_web_page_preview": True},
+                              timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise TelegramError(f"텔레그램 서버에 연결하지 못했습니다: {exc}") from exc
+
+        try:
+            body = r.json()
+        except ValueError:
+            body = {}
+        if r.status_code == 200 and body.get("ok"):
+            info = (body.get("result") or {}).get("chat") or {}
+            return (info.get("title") or info.get("username")
+                    or info.get("first_name") or chat)
+
+        raise TelegramError(_telegram_hint(
+            r.status_code, str(body.get("description") or r.text[:200])))
+
     def send_text(self, text: str) -> None:
         """시그널이 아닌 임의 메시지(봇 체결 알림 등) 전송."""
         if self.bot_token and self.chat_id:
@@ -88,6 +131,21 @@ class TelegramNotifier(Notifier):
                 log.warning("텔레그램 전송 실패 %s: %s", r.status_code, r.text[:200])
         except requests.RequestException as exc:
             log.warning("텔레그램 전송 오류: %s", exc)
+
+
+def _telegram_hint(status: int, desc: str) -> str:
+    """텔레그램 오류를 사람이 고칠 수 있는 안내 문구로 바꾼다."""
+    low = desc.lower()
+    if status == 401 or "unauthorized" in low:
+        return "Bot Token 이 잘못됐거나 폐기(revoke)됐습니다. BotFather 에서 다시 확인하세요."
+    if "chat not found" in low:
+        return ("Chat ID 를 찾을 수 없습니다. 텔레그램에서 봇에게 먼저 아무 메시지나 보낸 뒤 "
+                "getUpdates 로 받은 숫자 ID 를 넣으세요.")
+    if "bot was blocked" in low:
+        return "사용자가 봇을 차단했습니다. 텔레그램에서 차단을 해제하세요."
+    if "not enough rights" in low or "kicked" in low:
+        return "봇이 그 대화방에 메시지를 보낼 권한이 없습니다. 봇을 다시 초대하세요."
+    return f"텔레그램 오류 ({status}): {desc}"
 
 
 class JsonFileNotifier(Notifier):

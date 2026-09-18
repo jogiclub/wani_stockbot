@@ -34,7 +34,7 @@ services:
     volumes:
       - ./cache:/app/cache
       - ./out:/app/out
-    command: ["web", "--port", "8083", "--top", "200", "--interval", "300"]
+    command: ["web", "--port", "8083", "--top", "200", "--interval", "120", "--live"]
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8083/healthz', timeout=5).status==200 else 1)"]
@@ -48,7 +48,9 @@ services:
         max-size: "10m"
         max-file: "5"
 
-  # 장중 상시 감시 데몬: docker compose up -d poller
+  # 장중 상시 감시 데몬 (기본 비활성 — web 이 같은 기능을 포함한다).
+  # 굳이 띄우려면 web 을 내리거나 자격증명을 분리한 뒤:
+  #   docker compose --profile manual up -d poller
   poller:
     build:
       context: .
@@ -66,6 +68,7 @@ services:
     command: ["poll", "--top", "200", "--interval", "60", "--out", "/app/out/signals.jsonl"]
     restart: unless-stopped
     stop_grace_period: 20s
+    profiles: ["manual"]
     logging:
       driver: json-file
       options:

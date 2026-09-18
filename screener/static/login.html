@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="ko" data-theme-root>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>로그인 · 왔니 주식</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="/static/ui.js"></script>
+  <link rel="stylesheet" href="/static/common.css">
+</head>
+<body class="font-sans text-sm antialiased">
+  <div class="min-h-screen flex items-center justify-center px-4 py-6">
+    <form class="w-[min(380px,100%)] bg-s1 border border-line rounded-2xl px-6 pt-6 pb-5
+                 shadow-[0_18px_50px_rgba(0,0,0,.18)]" id="login-form">
+      <div class="flex items-center gap-2 text-lg font-bold mb-1">
+        <span class="inline-flex items-center justify-center w-[26px] h-[26px] rounded-lg
+                     bg-accent text-white text-sm">왔</span>왔니 주식</div>
+      <p class="text-[12.5px] text-txt3 m-0 mb-4" id="sub">자동 매매 전략 대시보드입니다. 계정으로 로그인하세요.</p>
+
+      <div class="flex gap-1 mb-3.5" id="tabs" hidden>
+        <button type="button" data-mode="login" aria-pressed="true"
+          class="flex-1 font-sans text-sm rounded-lg border border-line bg-s1 text-txt px-3.5 py-1.5
+                 hover:bg-s2 aria-pressed:bg-accent aria-pressed:text-white aria-pressed:border-accent">로그인</button>
+        <button type="button" data-mode="signup" aria-pressed="false"
+          class="flex-1 font-sans text-sm rounded-lg border border-line bg-s1 text-txt px-3.5 py-1.5
+                 hover:bg-s2 aria-pressed:bg-accent aria-pressed:text-white aria-pressed:border-accent">회원가입</button>
+      </div>
+
+      <div class="mb-3">
+        <label class="block text-xs text-txt2 mb-1" for="u">아이디</label>
+        <input class="font-sans text-sm w-full px-2.5 py-2 rounded-lg border border-line bg-s0 text-txt"
+               type="text" id="u" name="username" autocomplete="username" autofocus>
+      </div>
+      <div class="mb-3">
+        <label class="block text-xs text-txt2 mb-1" for="p">비밀번호</label>
+        <input class="font-sans text-sm w-full px-2.5 py-2 rounded-lg border border-line bg-s0 text-txt"
+               type="password" id="p" name="password" autocomplete="current-password">
+      </div>
+      <div class="mb-3" data-signup hidden>
+        <label class="block text-xs text-txt2 mb-1" for="p2">비밀번호 확인</label>
+        <input class="font-sans text-sm w-full px-2.5 py-2 rounded-lg border border-line bg-s0 text-txt"
+               type="password" id="p2" autocomplete="new-password">
+        <div class="text-[11.5px] text-txt3 mt-1">8자 이상. 아이디는 영문·숫자 3~32자.</div>
+      </div>
+      <div class="mb-3" data-signup data-code hidden>
+        <label class="block text-xs text-txt2 mb-1" for="code">초대 코드</label>
+        <input class="font-sans text-sm w-full px-2.5 py-2 rounded-lg border border-line bg-s0 text-txt"
+               type="text" id="code" autocomplete="off">
+      </div>
+
+      <button type="submit" id="login-btn"
+        class="w-full mt-1 font-sans text-sm rounded-lg border border-transparent bg-accent text-white
+               font-semibold py-2.5 hover:brightness-110 disabled:opacity-50
+               disabled:cursor-not-allowed">로그인</button>
+      <div class="text-[12.5px] mt-3 min-h-[18px] text-txt2" id="msg"></div>
+    </form>
+  </div>
+
+  <script>
+    // 테마는 GNB 와 같은 규칙(저장값 우선)을 쓴다 — 로그인 화면엔 GNB 가 없어 여기서 직접 적용.
+    try {
+      const saved = localStorage.getItem("theme");
+      if (saved) document.documentElement.setAttribute("data-theme", saved);
+    } catch (e) {}
+
+    const $ = (s) => document.querySelector(s);
+    let mode = "login", codeRequired = false;
+
+    // 회원가입은 서버가 허용할 때만 보인다 (APP_SIGNUP).
+    fetch("/api/auth/options").then(r => r.json()).then(o => {
+      if (!o.signup) return;
+      codeRequired = o.signup_code_required;
+      $("#tabs").hidden = false;
+      if (new URLSearchParams(location.search).get("signup") !== null) setMode("signup");
+    }).catch(() => {});
+
+    function setMode(m) {
+      mode = m;
+      document.querySelectorAll("#tabs button").forEach(b =>
+        b.setAttribute("aria-pressed", String(b.dataset.mode === m)));
+      document.querySelectorAll("[data-signup]").forEach(el => {
+        el.hidden = m !== "signup" || (el.hasAttribute("data-code") && !codeRequired);
+      });
+      $("#p").autocomplete = m === "signup" ? "new-password" : "current-password";
+      $("#login-btn").textContent = m === "signup" ? "가입하고 시작" : "로그인";
+      $("#sub").textContent = m === "signup"
+        ? "가입 후 상단 🔑 API 키 설정에서 본인 토스증권 API 키를 넣으면 나만의 스캔·자동매매가 시작됩니다."
+        : "자동 매매 전략 대시보드입니다. 계정으로 로그인하세요.";
+      $("#msg").textContent = "";
+    }
+    document.querySelectorAll("#tabs button").forEach(b => b.onclick = () => setMode(b.dataset.mode));
+
+    $("#login-form").addEventListener("submit", async (ev) => {
+      ev.preventDefault();
+      const btn = $("#login-btn"), msg = $("#msg");
+      const bad = (t) => { msg.className = "text-[12.5px] mt-3 min-h-[18px] text-bad"; msg.textContent = t; };
+      const body = { username: $("#u").value.trim(), password: $("#p").value };
+      if (mode === "signup") {
+        if (body.password !== $("#p2").value) return bad("비밀번호 확인이 일치하지 않습니다.");
+        body.code = $("#code").value.trim();
+      }
+      msg.className = "text-[12.5px] mt-3 min-h-[18px] text-txt2"; msg.textContent = "확인 중…";
+      btn.disabled = true;
+      try {
+        const r = await fetch(mode === "signup" ? "/api/signup" : "/api/login", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const out = await r.json();
+        if (!r.ok) return bad(out.detail || (mode === "signup" ? "가입 실패" : "로그인 실패"));
+        const next = new URLSearchParams(location.search).get("next");
+        location.href = next && next.startsWith("/") ? next : "/";
+      } catch (e) {
+        bad("서버에 연결하지 못했습니다: " + e);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

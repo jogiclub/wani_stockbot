@@ -1,5 +1,5 @@
-/* 공통 테마 토큰 + GNB. 세력추정매매(dashboard.html)와 볼린저(bollinger.html)가 함께 쓴다.
-   외부 CDN·프레임워크는 쓰지 않는다 (폐쇄망·컨테이너 고려).
+/* 테마 토큰 + Tailwind 로 표현하기 어려운 최소한의 규칙만 둔다.
+   화면 스타일은 전부 Tailwind 유틸리티(`/static/ui.js` 의 색 매핑)로 쓴다.
    색상: 상승/양봉 --up(적색), 하락/음봉 --down(청색) — 한국 시장 관례. */
 :root {
   color-scheme: light;
@@ -49,105 +49,34 @@
   --grid: rgba(255,255,255,.09);
 }
 
-* { box-sizing: border-box; }
 body {
-  margin: 0; background: var(--surface-0); color: var(--text-primary);
-  font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo",
-        "Malgun Gothic", "Noto Sans KR", sans-serif;
-  -webkit-font-smoothing: antialiased;
+  background: var(--surface-0);
+  color: var(--text-primary);
 }
 
-/* ------------------------------------------------------------------ GNB */
-.gnb {
-  position: sticky; top: 0; z-index: 50;
-  background: var(--surface-1); border-bottom: 1px solid var(--border);
-}
-.gnb-inner {
-  max-width: 1280px; margin: 0 auto; padding: 0 20px;
-  display: flex; align-items: center; gap: 8px; min-height: 54px; flex-wrap: wrap;
-}
-.gnb-brand {
-  display: inline-flex; align-items: center; gap: 7px; margin-right: 10px;
-  font-size: 17px; font-weight: 750; letter-spacing: -.02em;
-  color: var(--text-primary); text-decoration: none; white-space: nowrap;
-}
-.gnb-brand .mark {
-  width: 22px; height: 22px; border-radius: 7px; background: var(--accent);
-  color: #fff; font-size: 12px; font-weight: 800;
-  display: inline-flex; align-items: center; justify-content: center;
-}
-.gnb-menu { display: flex; gap: 2px; flex-wrap: wrap; }
-.gnb-menu a {
-  padding: 7px 12px; border-radius: 8px; text-decoration: none;
-  color: var(--text-secondary); font-weight: 550; white-space: nowrap;
-}
-.gnb-menu a:hover { background: var(--surface-2); color: var(--text-primary); }
-.gnb-menu a[aria-current="page"] {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
-  color: var(--accent); font-weight: 700;
-}
-.gnb-spacer { flex: 1 1 auto; }
-.gnb-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* 색 토큰이 CSS 변수라 Tailwind 의 투명도 수식(`bg-good/12`)을 못 쓴다.
+   경고 배너처럼 '옅게 깐 배경' 이 필요한 곳만 이 유틸을 쓴다. */
+.tint-accent { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.tint-good   { background: color-mix(in srgb, var(--good) 12%, transparent); }
+.tint-warn   { background: color-mix(in srgb, var(--warning) 16%, transparent); }
+.tint-bad    { background: color-mix(in srgb, var(--critical) 12%, transparent); }
 
-button { font: inherit; cursor: pointer; border-radius: 8px; border: 1px solid var(--border);
-         background: var(--surface-1); color: var(--text-primary); padding: 7px 14px; }
-button:hover { background: var(--surface-2); }
-button.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
-button.primary:disabled { opacity: .5; cursor: not-allowed; }
-button.danger { background: var(--critical); border-color: transparent; color: #fff; font-weight: 600; }
-button.danger:disabled { opacity: .5; cursor: not-allowed; }
+/* 점(●)이 살아 있음을 알리는 깜빡임 — Tailwind 기본 animate-pulse 보다 또렷하게. */
+@keyframes sf-pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
+.dot-live { animation: sf-pulse 1.6s ease-in-out infinite; }
+.dot-busy { animation: sf-pulse .9s ease-in-out infinite; }
 
-.badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px;
-         border-radius: 999px; font-size: 12px; font-weight: 600;
-         background: var(--surface-2); color: var(--text-secondary); border: 1px solid var(--border); }
-.badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--text-muted); }
-.badge.live .dot { background: var(--good); animation: pulse 1.6s ease-in-out infinite; }
-.badge.busy .dot { background: var(--warning); animation: pulse .9s ease-in-out infinite; }
-.badge.err  .dot { background: var(--critical); }
-.badge.warn { background: color-mix(in srgb, var(--warning) 22%, transparent);
-              border-color: var(--warning); color: var(--text-primary); }
-@keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
-
-@media (max-width: 640px) {
-  .gnb-inner { padding: 8px 14px; }
-  .gnb-brand { font-size: 16px; }
+/* AG Grid — 헤더 툴팁 표시, 행 커서. 나머지 모양은 Theming API(ui.js)가 맡는다. */
+.ag-header-cell[title] .ag-header-cell-text {
+  text-decoration: underline dotted var(--text-muted);
+  text-underline-offset: 3px;
+  cursor: help;
 }
+.grid-clickable .ag-row { cursor: pointer; }
 
-/* ------------------------------------------ 설정(개인 API 키) 모달 · 공통 폼 */
-  /* 설정(개인 API 키) 모달 */
-  .modal-back { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 20;
-                display: flex; align-items: flex-start; justify-content: center;
-                padding: 40px 16px; overflow-y: auto; }
-  .modal-back[hidden] { display: none; }
-  .modal { background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
-           width: min(560px, 100%); padding: 20px 22px 18px;
-           box-shadow: 0 18px 50px rgba(0,0,0,.3); }
-  .modal h2 { margin: 0 0 4px; font-size: 17px; }
-  .modal .sub { margin: 0 0 14px; font-size: 12.5px; color: var(--text-muted); }
-  .modal fieldset { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px;
-                    margin: 0 0 12px; }
-  .modal legend { font-size: 12px; color: var(--text-muted); padding: 0 6px; }
-  .field { margin-bottom: 10px; }
-  .field:last-child { margin-bottom: 0; }
-  .field label { display: block; font-size: 12px; color: var(--text-secondary); margin-bottom: 4px; }
-  .field input[type=text], .field input[type=password], .field input[type=number] {
-    font: inherit; width: 100%; padding: 8px 10px; border-radius: 8px;
-    border: 1px solid var(--border); background: var(--surface-0); color: var(--text-primary); }
-  .field .hint { font-size: 11.5px; color: var(--text-muted); margin-top: 4px; }
-  .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
-  .check input { width: 16px; height: 16px; }
-  .modal-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 14px; }
-  .modal-msg { font-size: 12.5px; margin-top: 10px; }
-  .modal-msg.bad { color: var(--critical); }
-  .modal-msg.ok { color: var(--good); }
-  .setup-bar { background: color-mix(in srgb, var(--accent) 12%, transparent);
-               border: 1px solid var(--accent); padding: 12px 14px; border-radius: 10px;
-               margin-bottom: 14px; font-size: 13px; display: flex; flex-wrap: wrap;
-               gap: 10px; align-items: center; }
-  .setup-bar[hidden] { display: none; }
+/* 인라인 SVG 차트는 폭을 컨테이너에 맞춘다. */
+svg.chart { display: block; width: 100%; height: auto; }
 
-.err-bar { background: color-mix(in srgb, var(--critical) 14%, transparent);
-           border: 1px solid var(--critical); color: var(--text-primary);
-           padding: 10px 14px; border-radius: 10px; margin-bottom: 14px; font-size: 13px; }
-.err-bar[hidden] { display: none; }
+/* `hidden` 속성이 Tailwind 의 display 유틸(flex/grid)에 밀리지 않게 못을 박는다.
+   예전에 `.regime[hidden]` 가 `display:flex` 에 져서 계속 보이던 버그가 있었다. */
+[hidden] { display: none !important; }

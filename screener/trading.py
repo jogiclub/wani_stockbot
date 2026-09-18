@@ -193,8 +193,13 @@ class TradingService:
         return out
 
     # ------------------------------------------------------------ 실행
-    def submit(self, *, dry_run: bool = True, **kwargs) -> OrderOutcome:
-        """매수 주문을 넣고, 체결되면 OCO(익절·손절)를 자동 등록한다."""
+    def submit(self, *, dry_run: bool = True, fill_timeout: float | None = None,
+               cancel_on_timeout: bool = False, **kwargs) -> OrderOutcome:
+        """매수 주문을 넣고, 체결되면 OCO(익절·손절)를 자동 등록한다.
+
+        `cancel_on_timeout` 이면 `fill_timeout` 까지 다 체결되지 않은 잔량을 취소한다
+        (자동매수용 — 손절 없는 늦은 체결을 남기지 않는다).
+        """
         plan = self.build_plan(**kwargs)
         outcome = OrderOutcome(ok=False, dry_run=dry_run, plan=plan.as_dict())
 
@@ -244,7 +249,8 @@ class TradingService:
             self._log(outcome)
 
         threading.Thread(target=self._attach_oco_when_filled,
-                         args=(account, outcome.order_id, plan),
+                         args=(account, outcome.order_id, plan,
+                               fill_timeout or self.fill_timeout, cancel_on_timeout),
                          name=f"oco-{plan.symbol}", daemon=True).start()
         return outcome
 
@@ -312,9 +318,12 @@ class TradingService:
         return out
 
     # ------------------------------------------------------------ 체결 후 OCO
-    def _attach_oco_when_filled(self, account: int, order_id: str, plan: OrderPlan) -> None:
-        deadline = time.monotonic() + self.fill_timeout
+    def _attach_oco_when_filled(self, account: int, order_id: str, plan: OrderPlan,
+                                timeout: float | None = None,
+                                cancel_on_timeout: bool = False) -> None:
+        deadline = time.monotonic() + (timeout or self.fill_timeout)
         filled = 0
+        done = False
         while time.monotonic() < deadline:
             try:
                 order = self.client.get_order(account, order_id)
@@ -322,15 +331,31 @@ class TradingService:
                 log.warning("주문 %s 조회 실패: %s", order_id, exc)
                 time.sleep(self.poll_interval)
                 continue
-            filled = int(_to_float((order.get("execution") or {}).get("filledQuantity")) or 0)
+            filled = _filled_qty(order)
             status = str(order.get("status", ""))
             if filled > 0 and status in ("FILLED", "COMPLETED", "EXECUTED"):
+                done = True
                 break
             if status in ("CANCELED", "REJECTED", "EXPIRED"):
                 log.info("주문 %s 종료(%s) — OCO 등록 안 함", order_id, status)
                 self._log_event({"event": "oco_skipped", "orderId": order_id, "status": status})
                 return
             time.sleep(self.poll_interval)
+
+        if not done and cancel_on_timeout:
+            try:
+                self.client.cancel_order(account, order_id)
+                self._log_event({"event": "order_canceled", "orderId": order_id,
+                                 "reason": "체결 시한 초과", "filled": filled})
+            except Exception as exc:
+                log.error("주문 %s 잔량 취소 실패 — 수동 확인 필요: %s", order_id, exc)
+                self._log_event({"event": "cancel_failed", "orderId": order_id,
+                                 "error": str(exc)})
+            try:                                # 취소 직전 체결분까지 다시 센다
+                order = self.client.get_order(account, order_id)
+                filled = _filled_qty(order)
+            except Exception as exc:
+                log.warning("주문 %s 재조회 실패: %s", order_id, exc)
 
         if filled <= 0:
             log.info("주문 %s 미체결 — OCO 등록 안 함", order_id)
@@ -393,6 +418,11 @@ def _mask(account_no: str) -> str:
     if not account_no:
         return ""
     return account_no[:4] + "*" * max(0, len(account_no) - 6) + account_no[-2:]
+
+
+def _filled_qty(order: dict) -> int:
+    q = _to_float((order.get("execution") or {}).get("filledQuantity"))
+    return int(q) if q == q else 0
 
 
 def _to_float(v) -> float:

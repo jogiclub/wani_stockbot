@@ -337,6 +337,35 @@ class TossClient:
                 break
         return out
 
+    def candles_page(self, symbol: str, interval: str = "1m", count: int = 200,
+                     before: str | None = None) -> dict:
+        """캔들 한 페이지 원본 (`candles`, `nextBefore`). 종료 조건을 호출자가 정할 때 쓴다."""
+        return self.get("/api/v1/candles", {
+            "symbol": symbol, "interval": interval, "count": min(count, 200),
+            "before": before, "adjusted": "true",
+        }, group="MARKET_DATA_CHART") or {}
+
+    def orderbook(self, symbol: str) -> dict:
+        """호가 (매도 `asks` / 매수 `bids` 각 10단계, 가격·잔량은 문자열 decimal)."""
+        return self.get("/api/v1/orderbook", {"symbol": symbol}, group="MARKET_DATA") or {}
+
+    def investor_trading(self, symbol: str, count: int = 1) -> list[dict]:
+        """투자자별 매매동향 (일별, 최신순). 당일 기록은 장중 잠정치다.
+
+        장중에는 개인·기관 세부·기타법인이 null 이고 외국인·기관 합계만 온다.
+        """
+        result = self.get(f"/api/v1/stocks/{symbol}/investor-trading",
+                          {"count": max(1, min(int(count), 100))},
+                          group="STOCK_TRADING_TREND") or {}
+        return result.get("records", [])
+
+    def program_trades(self, symbol: str, count: int = 1) -> list[dict]:
+        """프로그램매매 동향 (일별, 최신순, KRX 만 집계)."""
+        result = self.get(f"/api/v1/stocks/{symbol}/program-trades",
+                          {"count": max(1, min(int(count), 100))},
+                          group="STOCK_TRADING_TREND") or {}
+        return result.get("records", [])
+
     def index_candles(self, symbol: str = "KOSDAQ", interval: str = "1d",
                       count: int = 200, before: str | None = None) -> dict:
         """시장 지표(지수) 캔들. 심볼 카탈로그: KOSPI, KOSDAQ, KR_BOND_* 등."""

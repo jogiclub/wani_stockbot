@@ -102,3 +102,37 @@ def test_dashboard_html_has_guide_tab(client):
     html = client.get("/").text
     assert 'data-tab="guide"' in html
     assert "renderGuide" in html and "posCalc" in html
+
+
+def test_watch_excludes_symbols_that_already_signaled(client):
+    """시그널이 뜬 종목은 '돌파 대기' 에 다시 나오지 않는다 (둘이 겹쳐 혼동됐던 회귀)."""
+    body = client.get("/api/state").json()
+    signaled = {s["종목코드"] for s in body["signals"]}
+    assert signaled == {"900001"}
+    assert signaled.isdisjoint(w["종목코드"] for w in body["watch"])
+
+
+def test_watch_trigger_is_prev_high_like_signal():
+    """감시 돌파가는 판정일의 전일 고가다 — 시그널의 전일고가와 같은 값이어야 한다.
+
+    예전에는 마지막 봉 자신의 고가를 '전일고가' 라벨로 내보내 값이 어긋났다.
+    """
+    loader = SyntheticDataLoader(n_symbols=1, signal_symbols=("900001",))
+    cfg = StrategyConfig(min_avg_turnover=0.0, max_market_cap=0.0, min_price=0.0)
+    scr = Screener(loader, cfg, max_workers=1)
+    sig = scr.scan().signals[0]
+    watch = scr.watch_candidates()            # exclude 없이 부르면 같은 종목이 잡힌다
+    assert [w["종목코드"] for w in watch] == ["900001"]
+    assert watch[0]["감시_돌파가(전일고가)"] == round(sig.prev_high, 2)
+    assert watch[0]["판정일"] == sig.signal_date.strftime("%Y-%m-%d")
+    assert scr.watch_candidates(exclude={"900001"}) == []
+
+
+def test_dashboard_has_stock_menu(client):
+    """종목 메뉴는 공통 모듈(stockmenu.js)이다 — 세력추정·수급포착 두 화면이 함께 쓴다."""
+    for page in ("/", "/supply"):
+        assert "/static/stockmenu.js" in client.get(page).text
+    js = client.get("/static/stockmenu.js").text
+    assert 'id="stock-menu"' in js
+    assert "토스로 보기" in js and "반전 매매에 종목추가" in js
+    assert "/api/bollinger/symbols" in js

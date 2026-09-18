@@ -79,7 +79,10 @@ def cmd_scan(args, app, cfg):
 def cmd_watch(args, app, cfg):
     loader = build_loader(args, app, cfg)
     scr = Screener(loader, cfg, max_workers=args.workers)
-    rows = scr.watch_candidates(limit=args.limit, symbols=resolve_symbols(args, loader))
+    symbols = resolve_symbols(args, loader)
+    report = scr.scan(limit=args.limit, symbols=symbols, live=args.live)
+    done = {s.symbol for s in report.signals} | {b["종목코드"] for b in report.blocked}
+    rows = scr.watch_candidates(limit=args.limit, symbols=symbols, exclude=done)
     if not rows:
         print("돌파 대기 종목 없음")
         return 0
@@ -109,6 +112,28 @@ def cmd_poll(args, app, cfg):
         except KeyboardInterrupt:
             print("\n감시 종료")
             return 0
+
+
+def cmd_supply(args, app, cfg):
+    """수급 포착 매매 1회 스캔 (장 초반 거래량 급증 + 수급 연속성). 토스 소스 전용."""
+    from screener.supply import SupplyConfig, SupplyScanner
+
+    loader = build_loader(args, app, cfg)
+    if not isinstance(loader, TossDataLoader):
+        print("수급 포착 매매는 토스 1분봉이 필요합니다 (--source toss).")
+        return 2
+    report = SupplyScanner(loader, SupplyConfig(), max_workers=args.workers).scan()
+    print(f"기준일 {report.session} · 후보 {report.scanned} · 포착 {len(report.signals)}"
+          f" · 제외 {len(report.blocked)} · 오류 {report.errors}")
+    if not report.signals:
+        print("포착된 종목 없음")
+        return 0
+    cols = ["상태", "점수", "종목코드", "종목명", "판정시각", "현재가", "등락률%", "급증배수",
+            "매수비중%", "VWAP", "손절가", "가격위치%", "유의사항"]
+    rows = [{k: s.to_dict()[k] for k in cols} for s in report.signals]
+    print(pd.DataFrame(rows).to_string(index=False))
+    print("\n※ 백테스트로 검증되지 않은 전략입니다. 재료(뉴스·공시)는 직접 확인하세요.")
+    return 0
 
 
 def cmd_explain(args, app, cfg):
@@ -175,6 +200,7 @@ def cmd_web(args, app, cfg):
         max_order_amount=app.max_order_amount, order_log=app.order_log,
         bollinger_log=app.order_log.parent / "bollinger.log",
         max_sessions=args.max_sessions,
+        supply_interval=args.supply_interval,
     ) if args.source == "toss" else None
 
     notifier = None
@@ -205,12 +231,68 @@ def cmd_web(args, app, cfg):
                     else None),
             log_path=app.order_log.parent / "bollinger.log")
 
+    # 수급 포착 매매 (서버 기본 자격증명용). 시세만 보므로 주문과 무관하다.
+    supply = None
+    if isinstance(loader, TossDataLoader):
+        from screener.supply import SupplyConfig, SupplyScanner, SupplyService
+        supply = SupplyService(
+            SupplyScanner(loader, SupplyConfig(), max_workers=args.workers),
+            interval=args.supply_interval,
+            notify=(TelegramNotifier(app.telegram_bot_token, app.telegram_chat_id).send_text
+                    if app.telegram_bot_token and app.telegram_chat_id and not args.no_telegram
+                    else None))
+
+    # 로그인·설정 저장소 (SQLite). `--no-login` 이면 예전처럼 인증 없이 뜬다.
+    store = None
+    if not args.no_login:
+        from screener.store import Store
+        store = Store(app.db_path, secret_key=app.app_secret_key)
+        if app.admin_user and app.admin_password:
+            if store.ensure_user(app.admin_user, app.admin_password, admin=True):
+                print(f"기본 관리자 계정을 만들었습니다: {app.admin_user}")
+        # 관리자 구분 이전에 만든 DB — APP_ADMIN_USER 계정을 관리자로 올린다.
+        if not store.admins() and app.admin_user in store.users():
+            store.set_admin(app.admin_user)
+            print(f"관리자 지정: {app.admin_user}")
+        if not store.users():
+            print("계정이 없습니다 — `.env` 에 APP_ADMIN_PASSWORD 를 넣거나 "
+                  "`python main.py adduser <아이디> --admin` 으로 먼저 만드세요.")
+        if app.app_secret_key in ("", "jogiclub", "change-me"):
+            print("⚠ APP_SECRET_KEY 가 기본값입니다. 여러 사람이 쓰는 서버라면 "
+                  "긴 임의 문자열로 바꾸세요 (바꾸면 저장된 키는 다시 입력해야 합니다).")
+        print("회원가입: " + ("열림" + (" (초대 코드 필요)" if app.signup_code else "")
+                              if app.signup_enabled else "닫힘"))
+
     application = create_app(loader, cfg, interval=args.interval, top=args.top or 0,
                              limit=args.limit, live=args.live, notifier=notifier,
                              workers=args.workers, trading=trading, sessions=sessions,
-                             bollinger=bollinger)
-    print(f"대시보드: http://{args.host}:{args.port}")
+                             bollinger=bollinger, supply=supply, store=store,
+                             signup=app.signup_enabled, signup_code=app.signup_code)
+    print(f"대시보드: http://{args.host}:{args.port}"
+          + (" (로그인 필요)" if store else ""))
     uvicorn.run(application, host=args.host, port=args.port, log_level="warning")
+    return 0
+
+
+def cmd_adduser(args, app, cfg):
+    """계정 생성·비밀번호 변경. 비밀번호는 **화면에 찍히지 않게** 직접 입력받는다."""
+    import getpass
+
+    from screener.store import Store
+
+    store = Store(app.db_path, secret_key=app.app_secret_key)
+    pw = args.password or getpass.getpass("비밀번호: ")
+    if not pw:
+        print("비밀번호가 비었습니다.")
+        return 2
+    if store.ensure_user(args.username, pw, admin=args.admin):
+        print(f"계정을 만들었습니다: {args.username}" + (" (관리자)" if args.admin else ""))
+    else:
+        store.set_password(args.username, pw)
+        print(f"비밀번호를 변경했습니다: {args.username}")
+        if args.admin:
+            store.set_admin(args.username)
+            print("관리자로 지정했습니다.")
     return 0
 
 
@@ -293,7 +375,9 @@ def main(argv=None) -> int:
     p.add_argument("--out", help="시그널 JSONL 저장 경로")
     p.add_argument("--csv-out", help="시그널 CSV 저장 경로")
     p.add_argument("--no-telegram", action="store_true")
-    p.add_argument("--max-sessions", type=int, default=8,
+    p.add_argument("--supply-interval", type=int, default=60,
+                   help="web: 수급 포착 매매 장중 스캔 주기(초). 장 밖에서는 30분에 한 번")
+    p.add_argument("--max-sessions", type=int, default=20,
                    help="web: 개인 API 키 세션 동시 접속 상한 (세션마다 스캔 스레드 1개)")
     p.add_argument("--no-trading", action="store_true",
                    help="실거래를 강제로 끈다 (TOSS_TRADING_ENABLED 보다 우선)")
@@ -331,8 +415,15 @@ def main(argv=None) -> int:
     p.add_argument("--bb-poll", type=int, default=60, help="볼린저 봇 점검 주기(초)")
     p.add_argument("--live-orders", action="store_true",
                    help="⚠ 볼린저 봇 실주문 (TOSS_TRADING_ENABLED 도 함께 켜져 있어야 함)")
+    p.add_argument("--no-login", action="store_true",
+                   help="web: 로그인 없이 띄운다 (사내망 등 신뢰된 환경에서만)")
+    p.add_argument("--admin", action="store_true",
+                   help="adduser: 관리자로 만든다 (서버 .env 계좌로 주문·봇 사용 가능)")
+    p.add_argument("--password", help="adduser: 비밀번호를 인자로 준다 "
+                                      "(셸 기록에 남으니 되도록 대화식 입력을 쓸 것)")
     p.add_argument("command", choices=["scan", "watch", "poll", "web", "backtest",
-                                       "explain", "demo", "bollinger"])
+                                       "explain", "demo", "bollinger", "adduser", "supply"])
+    p.add_argument("username", nargs="?", help="adduser: 만들 계정 아이디")
 
     args = p.parse_args(argv)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO,
@@ -355,11 +446,14 @@ def main(argv=None) -> int:
         cfg.stop_pct = args.stop_pct
     if args.command == "demo":
         args.source = "synthetic"
+    if args.command == "adduser" and not args.username:
+        p.error("adduser 에는 아이디가 필요합니다: python main.py adduser <아이디>")
 
     app = AppConfig()
     handler = {"scan": cmd_scan, "watch": cmd_watch, "poll": cmd_poll, "web": cmd_web,
                "backtest": cmd_backtest, "explain": cmd_explain, "demo": cmd_demo,
-               "bollinger": cmd_bollinger}[args.command]
+               "bollinger": cmd_bollinger, "adduser": cmd_adduser,
+               "supply": cmd_supply}[args.command]
     try:
         return handler(args, app, cfg)
     except KeyboardInterrupt:
