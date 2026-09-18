@@ -259,6 +259,7 @@ def test_service_alerts_once_per_symbol_during_market():
     svc.scan_once()
     svc.scan_once()
     assert len(sent) == 1 and "지속주" in sent[0] and "진입" in sent[0]
+    assert "https://www.tossinvest.com/stocks/000001" in sent[0]   # 토스 링크 동봉
     state = svc.state.as_dict()
     json.dumps(state, allow_nan=False)
     assert state["session"] == DAY.isoformat() and state["market_open"] is True

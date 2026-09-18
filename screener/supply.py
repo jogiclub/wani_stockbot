@@ -26,6 +26,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import threading
 import time
@@ -668,9 +669,13 @@ class SupplyService:
         lines = ["🔥 [수급포착] 진입 적합 종목 — 재료(뉴스·공시)는 직접 확인하세요"]
         for s in fresh:
             self._alerted.add((s.session.isoformat(), s.symbol))
-            lines.append(f"· {s.name}({s.symbol}) {s.price:,.0f}원 {s.change * 100:+.1f}% · "
+            # 토스 종목 페이지 링크를 함께 보낸다. TelegramNotifier 는 HTML 모드라
+            # 종목명은 이스케이프하고(F&F 같은 & 안전), 링크는 raw URL 로 둬 눈에 보이게 한다.
+            url = f"https://www.tossinvest.com/stocks/{s.symbol}"
+            lines.append(f"· {html.escape(s.name)}({s.symbol}) "
+                         f"{s.price:,.0f}원 {s.change * 100:+.1f}% · "
                          f"급증 {s.surge_ratio * 100:.0f}% · 매수 {s.buy_ratio * 100:.0f}% · "
-                         f"손절 {s.stop:,.0f} · {s.score}점")
+                         f"손절 {s.stop:,.0f} · {s.score}점\n  {url}")
         try:
             self.notify("\n".join(lines))
         except Exception as exc:

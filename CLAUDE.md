@@ -525,6 +525,8 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
   화면을 열었는데 결과가 없으면 `/api/supply/state` 가 즉시 1회 스캔을 띄운다.
   텔레그램은 **장중에 새로 '진입'(`SupplySignal.entry`)이 된 종목만**, (기준일, 종목)당 1회 보낸다
   (2026-09-18: 예전엔 '지속' 전체를 보냈으나, 갭 과열·고점권까지 걸러낸 진입 후보만 보내도록 바꿈).
+  메시지에 **토스 종목 페이지 링크**(`https://www.tossinvest.com/stocks/{코드}`)를 함께 싣는다.
+  `TelegramNotifier` 가 HTML 모드라 종목명은 `html.escape` 한다(F&F 등 `&` 안전).
 - 세션마다 수급 스레드가 1개 더 뜬다(세션 생성 시 시작, `close()` 에서 정지).
 - JSON 으로 나가는 값은 `clean()` 으로 NaN → null 처리한다 (Starlette 는 NaN 을 거부한다).
 

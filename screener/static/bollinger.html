@@ -68,6 +68,9 @@
     <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="events" aria-selected="false">체결 · 로그<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-ev">0</span></button>
     <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="config" aria-selected="false">전략 설정</button>
     <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="rules" aria-selected="false">매매 규칙</button>
+    <div class="flex-1"></div>
+    <button class="self-center text-sm rounded-lg border border-line bg-s1 text-txt px-3 py-1 mb-1.5
+            hover:bg-s2" id="add-btn" type="button">＋ 종목 추가</button>
   </div>
 
   <div id="view"></div>
@@ -180,7 +183,7 @@ function paint() {
 
   const notes = [];
   if (!s.trading_allowed) notes.push("서버 실거래 스위치가 꺼져 있어 <b>모의 주문만</b> 가능합니다 (설정의 '실주문 허용'과 서버 <code class=\"bg-s2 px-1.5 py-0.5 rounded\">TOSS_TRADING_ENABLED</code> 가 모두 필요).");
-  if (!(cfg.symbols || []).length) notes.push("감시 종목이 없습니다 — <b>전략 설정</b> 탭에서 종목코드를 추가하세요.");
+  if (!(cfg.symbols || []).length) notes.push("감시 종목이 없습니다 — 오른쪽 위 <b>＋ 종목 추가</b> 버튼으로 종목코드를 넣으세요.");
   if (s.running && !s.market_open) notes.push("정규장(09:00~15:30) 시간이 아닙니다 — 판정만 하고 주문은 내지 않습니다.");
   if ((s.adopted || []).length) notes.push(
     `<b>${s.adopted.join(", ")}</b> 는 봇이 매수한 물량이 아니라 <b>이미 계좌에 있던 보유분</b>입니다 — `
@@ -375,14 +378,6 @@ function renderConfig() {
   const CHECK = "flex items-center gap-2 text-[13px] mt-2.5 [&_input]:w-4 [&_input]:h-4";
   $("#view").innerHTML = `<div class="${CARD} px-[18px] py-4 grid gap-3.5">
     <fieldset class="${u.fieldset} !mb-0">
-      <legend class="${u.legend}">감시 종목</legend>
-      <label class="${u.label}" for="c-symbols">종목코드 (6자리, 쉼표 또는 공백으로 구분)</label>
-      <input class="${u.input}" type="text" id="c-symbols" value="${(c.symbols || []).join(", ")}"
-             placeholder="005930, 000660, 035720">
-      <div class="${u.hint}">국내 주식만 지원합니다. 종목이 많을수록 한 주기가 길어집니다.</div>
-    </fieldset>
-
-    <fieldset class="${u.fieldset} !mb-0">
       <legend class="${u.legend}">지표</legend>
       <div class="${GRID3}">
         <div><label class="${u.label}" for="c-interval">봉 주기</label>
@@ -447,7 +442,6 @@ function renderConfig() {
   const MSG = { bad: "text-[12.5px] text-bad", ok: "text-[12.5px] text-good", "": "text-[12.5px]" };
   $("#c-save").onclick = async () => {
     const body = {
-      symbols: $("#c-symbols").value,
       interval: $("#c-interval").value,
       bb_period: Number($("#c-bbp").value),
       bb_stddev: Number($("#c-bbs").value),
@@ -670,6 +664,114 @@ $("#run-btn").onclick = async () => {
   await fetch("/api/bollinger/run", { method: "POST" });
   setTimeout(() => { $("#run-btn").disabled = false; refresh(); }, 1500);
 };
+
+/* ------------------------------------------------- 종목 추가 모달 */
+/* 감시 목록 편집은 전략 설정 폼에서 떼어내 이 창으로 모았다. 추가는 서버에서 합치는
+   /symbols 를 쓰고(다른 설정을 덮어쓰지 않는다), 삭제는 목록 전체를 /config 로 보낸다. */
+const ADD_MODAL = `<div class="${UI.cls.modalBack}" id="add-modal" hidden role="dialog" aria-modal="true" aria-labelledby="add-title">
+  <div class="${UI.cls.modal}">
+    <h2 class="text-base font-semibold m-0 mb-1" id="add-title">감시 종목 추가</h2>
+    <p class="text-[12.5px] text-txt3 mt-0 mb-3.5">국내 주식 6자리 코드만 지원합니다.
+      쉼표나 공백으로 여러 개를 한 번에 넣을 수 있습니다. 종목이 많을수록 한 주기가 길어집니다.</p>
+
+    <label class="${UI.cls.label}" for="a-symbols">종목코드</label>
+    <div class="flex gap-2">
+      <input class="${UI.cls.input}" type="text" id="a-symbols" autocomplete="off" spellcheck="false"
+             placeholder="005930, 000660">
+      <button class="${UI.cls.btnPrimary} shrink-0" id="a-add" type="button">추가</button>
+    </div>
+    <div class="text-[12.5px] mt-2.5" id="a-msg"></div>
+
+    <fieldset class="${UI.cls.fieldset} mt-3.5 mb-0">
+      <legend class="${UI.cls.legend}">현재 감시 목록</legend>
+      <div class="flex flex-wrap gap-1.5" id="a-list"></div>
+    </fieldset>
+
+    <div class="flex justify-end mt-3.5">
+      <button class="${UI.cls.btn}" id="a-close" type="button">닫기</button>
+    </div>
+  </div>
+</div>`;
+document.body.insertAdjacentHTML("beforeend", ADD_MODAL);
+
+const A_MSG = { bad: "text-[12.5px] mt-2.5 text-bad", ok: "text-[12.5px] mt-2.5 text-good", "": "text-[12.5px] mt-2.5" };
+const addMsg = (kind, text) => { const m = $("#a-msg"); m.className = A_MSG[kind]; m.innerHTML = text; };
+
+function renderAddList() {
+  const syms = (STATE && STATE.config && STATE.config.symbols) || [];
+  $("#a-list").innerHTML = syms.length
+    ? syms.map(sym => `<span class="inline-flex items-center gap-1.5 text-[12.5px] tabular-nums
+         bg-s2 border border-line rounded-full pl-2.5 pr-1 py-0.5">${sym}
+         <button class="border-0 bg-transparent text-txt3 hover:text-bad cursor-pointer px-1 leading-none"
+           data-del="${sym}" type="button" aria-label="${sym} 제거">×</button></span>`).join("")
+    : `<span class="text-[12.5px] text-txt3">아직 없습니다.</span>`;
+  $("#a-list").querySelectorAll("[data-del]").forEach(b => { b.onclick = () => removeSymbol(b.dataset.del); });
+}
+
+function openAddModal() {
+  $("#add-modal").hidden = false;
+  addMsg("", "");
+  $("#a-symbols").value = "";
+  renderAddList();
+  $("#a-symbols").focus();
+}
+const closeAddModal = () => { $("#add-modal").hidden = true; };
+
+async function addSymbols() {
+  const codes = [...new Set(($("#a-symbols").value.match(/\d{6}/g) || []))];
+  if (!codes.length) { addMsg("bad", "6자리 종목코드를 입력하세요."); return; }
+  $("#a-add").disabled = true;
+  addMsg("", "추가하는 중…");
+  const added = [], dup = [], failed = [];
+  try {
+    for (const symbol of codes) {
+      const r = await fetch("/api/bollinger/symbols", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbol }),
+      });
+      const out = await r.json().catch(() => ({}));
+      if (!r.ok) failed.push(`${symbol}(${out.detail || "실패"})`);
+      else if (out.added) added.push(symbol);
+      else dup.push(symbol);
+    }
+  } catch (e) {
+    $("#a-add").disabled = false;
+    addMsg("bad", "서버에 연결하지 못했습니다: " + e);
+    return;
+  }
+  $("#a-add").disabled = false;
+  await refresh();
+  renderAddList();
+  $("#a-symbols").value = "";
+  const parts = [];
+  if (added.length) parts.push(`<b>${added.join(", ")}</b> 추가`);
+  if (dup.length) parts.push(`${dup.join(", ")} 는 이미 있습니다`);
+  if (failed.length) parts.push(`${failed.join(", ")}`);
+  addMsg(failed.length ? "bad" : "ok", parts.join(" · "));
+}
+
+async function removeSymbol(symbol) {
+  const rest = ((STATE.config || {}).symbols || []).filter(s => s !== symbol);
+  addMsg("", "제거하는 중…");
+  try {
+    const r = await fetch("/api/bollinger/config", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ symbols: rest }),
+    });
+    const out = await r.json().catch(() => ({}));
+    if (!r.ok) { addMsg("bad", out.detail || "제거 실패"); return; }
+    await refresh();
+    renderAddList();
+    addMsg("ok", `<b>${symbol}</b> 를 감시 목록에서 뺐습니다.`);
+  } catch (e) {
+    addMsg("bad", "서버에 연결하지 못했습니다: " + e);
+  }
+}
+
+$("#add-btn").onclick = openAddModal;
+$("#a-add").onclick = addSymbols;
+$("#a-close").onclick = closeAddModal;
+$("#a-symbols").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addSymbols(); } };
+$("#add-modal").onclick = (e) => { if (e.target.id === "add-modal") closeAddModal(); };
+document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#add-modal").hidden) closeAddModal(); });
 
 document.addEventListener("sessionchange", () => { SELECTED = null; $("#detail").innerHTML = ""; refresh(); });
 document.addEventListener("themechange", () => { if (SELECTED) selectSymbol(SELECTED); });
