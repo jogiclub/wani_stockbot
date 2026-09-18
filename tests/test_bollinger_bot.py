@@ -381,3 +381,34 @@ def test_add_symbol_without_bot_is_503():
                      interval=9999, top=0, bollinger=None)
     with TestClient(app) as c:
         assert c.post("/api/bollinger/symbols", json={"symbol": "005930"}).status_code == 503
+
+def test_remove_symbol_drops_from_watch(client):
+    client.post("/api/bollinger/config", json={"symbols": "005930,100130", "stop_loss_pct": 0.03})
+    r = client.request("DELETE", "/api/bollinger/symbols", json={"symbol": "100130"})
+    assert r.status_code == 200 and r.json()["removed"] is True
+    assert r.json()["symbols"] == ["005930"]
+    cfg = client.get("/api/bollinger/state").json()["config"]
+    assert cfg["symbols"] == ["005930"] and cfg["stop_loss_pct"] == 0.03   # 다른 설정 보존
+
+
+def test_remove_symbol_refuses_held_position(client):
+    """보유 중(진행 중)인 종목은 감시 목록에서 삭제할 수 없다."""
+    client.post("/api/bollinger/config", json={"symbols": "005930,100130"})
+    client.bot.positions["100130"] = Position("100130", quantity=5, entry_price=1000)
+    r = client.request("DELETE", "/api/bollinger/symbols", json={"symbol": "100130"})
+    assert r.status_code == 409
+    assert client.get("/api/bollinger/state").json()["config"]["symbols"] == ["005930", "100130"]
+
+
+def test_remove_symbol_allows_zero_quantity_position(client):
+    """전량 청산된(수량 0) 보유 흔적은 삭제를 막지 않는다."""
+    client.post("/api/bollinger/config", json={"symbols": "005930"})
+    client.bot.positions["005930"] = Position("005930", quantity=0)
+    r = client.request("DELETE", "/api/bollinger/symbols", json={"symbol": "005930"})
+    assert r.status_code == 200 and r.json()["symbols"] == []
+
+
+@pytest.mark.parametrize("bad", ["", "5930", "00593A", None])
+def test_remove_symbol_rejects_bad_code(client, bad):
+    assert client.request("DELETE", "/api/bollinger/symbols",
+                          json={"symbol": bad}).status_code == 400

@@ -274,6 +274,7 @@ function renderWatch() {
     GRID = Grid.create(gridHost(true), {
       rows, rowHeight: 48, options: { rowClassRules: ROW_CLASS },
       columns: [
+        delCol(),
         actCol("판정", TIPS["판정"]),
         { field: "종목코드", minWidth: 104,
           cellRenderer: (p) => tossLink(p.value, p.value, "font-semibold") },
@@ -305,10 +306,49 @@ function renderWatch() {
           cellRenderer: (p) => `${p.value || ""}${p.data["결과"] && p.data["결과"].message
             ? `<div class="text-txt3">→ ${p.data["결과"].message}</div>` : ""}` },
       ],
-      onRow: (data) => selectSymbol(data["종목코드"]),
+      onRow: (data, ev) => { if (!removeFromEvent(ev)) selectSymbol(data["종목코드"]); },
     });
   } else {
     GRID.setGridOption("rowData", rows);
+  }
+}
+
+/* 감시 그리드 맨 왼쪽 삭제 열.
+   보유 중(진행 중)인 종목은 삭제하면 봇이 손절·익절을 못 하므로 버튼 대신 자물쇠만 보여준다. */
+function delCol() {
+  return { headerName: "", colId: "del", width: 48, minWidth: 44, maxWidth: 52,
+    sortable: false, resizable: false, cellClass: "text-center",
+    cellRenderer: (p) => {
+      const sym = p.data["종목코드"];
+      const held = (STATE.positions || []).some(x => x.symbol === sym);
+      return held
+        ? `<span class="text-txt3" title="보유 중 — 청산 후에 삭제할 수 있습니다">🔒</span>`
+        : `<button type="button" class="sf-del text-bad text-base leading-none hover:brightness-125"
+             data-del="${sym}" title="감시 목록에서 삭제" aria-label="삭제">✕</button>`;
+    } };
+}
+
+/* 행 클릭이 삭제 버튼에서 왔으면 삭제하고 true (상세는 열지 않는다) */
+function removeFromEvent(ev) {
+  const btn = ev && ev.target && ev.target.closest && ev.target.closest("button.sf-del");
+  if (!btn) return false;
+  removeSymbol(btn.dataset.del);
+  return true;
+}
+
+async function removeSymbol(symbol) {
+  const name = ((STATE.decisions || []).find(d => d["종목코드"] === symbol) || {})["종목명"] || symbol;
+  if (!confirm(`${name}(${symbol})을(를) 감시 목록에서 삭제할까요?`)) return;
+  try {
+    const r = await fetch("/api/bollinger/symbols", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ symbol }) });
+    const body = await r.json().catch(() => ({}));
+    if (!r.ok) { alert(body.detail || `삭제하지 못했습니다 (HTTP ${r.status})`); return; }
+    if (SELECTED === symbol) { SELECTED = null; $("#detail").innerHTML = ""; }
+    refresh();
+  } catch (e) {
+    alert("요청 실패: " + e.message);
   }
 }
 

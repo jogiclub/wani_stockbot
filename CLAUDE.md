@@ -196,6 +196,9 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
   `POST /api/bollinger/live` 는 `confirm="실행"` 을 요구한다.
 - **정규장 밖에서는 주문하지 않는다** (`market_is_open`, 09:00~15:30 평일). 판정·표시만 한다.
 - **감시 목록에 있는 국내 종목만** 관리한다. 계좌의 다른 보유분은 세지도 팔지도 않는다.
+- **감시 목록 삭제는 보유 중(진행 중) 종목을 거부한다** (`DELETE /api/bollinger/symbols`, 409).
+  감시에서 빼면 봇이 그 물량의 손절·익절을 관리하지 못하기 때문. 화면(감시 그리드 맨 왼쪽 ✕)도
+  보유 종목엔 버튼 대신 자물쇠만 보여준다. 청산(수량 0) 후에는 삭제할 수 있다.
 - **`manage_existing=False` (기본)**: 봇이 사지 않은 기존 보유분은 **청산하지 않는다.**
   이 게이트가 없으면 감시 목록에 장기 보유 종목을 넣는 순간 첫 주기에 털린다
   (실제 계좌로 검증 중 삼성전자·SK하이닉스 물량이 즉시 부분익절 대상이 됐다).
@@ -336,6 +339,7 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 - 수급 API: `GET /api/supply/state` · `POST /api/supply/scan` · `GET /api/supply/chart/{symbol}`
   (`_supply(request)` 로 세션 > 서버 순). 서버에 수급 서비스가 없으면 state 는 `configured:false`, 나머지는 503.
 - 볼린저 API: `GET /api/bollinger/state` · `POST /api/bollinger/{config,symbols,live,start,stop,run}` ·
+  `DELETE /api/bollinger/symbols`(감시 목록에서 종목 1개 제거 — **보유 중이면 409 로 거부**) ·
   `GET /api/bollinger/chart/{symbol}`. 봇은 세션마다 하나씩 만들되 **자동 시작하지 않는다**
   (주문을 내는 루프라 사용자가 명시적으로 시작해야 한다).
 

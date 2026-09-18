@@ -733,6 +733,30 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
                              "symbols": list(bot.cfg.symbols),
                              "running": bot.state.running, "persisted": persisted})
 
+    @app.delete("/api/bollinger/symbols")
+    def bollinger_remove_symbol(request: Request, body: dict) -> JSONResponse:
+        """감시 목록에서 종목 1개를 뺀다.
+
+        **보유 중(진행 중)인 종목은 거부한다** — 감시에서 빼면 봇이 그 물량의 손절·익절을
+        더 이상 관리하지 못해 위험하기 때문이다. 청산 후에 삭제해야 한다.
+        """
+        bot = _bot(request)
+        symbol = str(body.get("symbol", "")).strip()
+        if not re.fullmatch(r"\d{6}", symbol):
+            raise HTTPException(status_code=400, detail="종목코드는 6자리 숫자여야 합니다.")
+        pos = bot.positions.get(symbol)
+        if pos is not None and pos.quantity > 0:
+            raise HTTPException(status_code=409,
+                                detail="보유 중인 종목입니다. 청산 후에 삭제하세요.")
+        current = tuple(bot.cfg.symbols)
+        removed = symbol in current
+        if removed:
+            bot.update_config(replace(bot.cfg, symbols=tuple(x for x in current if x != symbol)))
+        persisted = _bb_save(request, bot)
+        return JSONResponse({"ok": True, "removed": removed, "symbol": symbol,
+                             "symbols": list(bot.cfg.symbols),
+                             "running": bot.state.running, "persisted": persisted})
+
     @app.post("/api/bollinger/live")
     def bollinger_live(request: Request, body: dict) -> JSONResponse:
         """실주문 스위치. 켜려면 `confirm="실행"` 이 필요하다 (실수 방지)."""
