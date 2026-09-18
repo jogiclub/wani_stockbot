@@ -364,6 +364,30 @@ def test_add_symbol_appends_without_touching_other_settings(client):
     assert cfg["stop_loss_pct"] == 0.03 and cfg["interval"] == "30m"   # 다른 설정 보존
 
 
+def test_add_symbol_triggers_immediate_run(client):
+    """종목을 추가하면 즉시 1회 판정(run_once)을 백그라운드로 돌린다 (반전매매 화면 지연 방지)."""
+    import time
+    calls: list[int] = []
+    client.bot.run_once = lambda: calls.append(1)
+    client.post("/api/bollinger/symbols", json={"symbol": "100130"})
+    for _ in range(100):                       # 백그라운드 스레드가 부를 때까지 잠깐 기다린다
+        if calls:
+            break
+        time.sleep(0.02)
+    assert calls == [1]
+
+
+def test_add_symbol_idempotent_skips_run(client):
+    """이미 있는 종목이면 판정을 다시 돌리지 않는다."""
+    import time
+    client.post("/api/bollinger/config", json={"symbols": "005930"})
+    calls: list[int] = []
+    client.bot.run_once = lambda: calls.append(1)
+    client.post("/api/bollinger/symbols", json={"symbol": "005930"})
+    time.sleep(0.2)
+    assert calls == []
+
+
 def test_add_symbol_is_idempotent(client):
     client.post("/api/bollinger/config", json={"symbols": "005930"})
     r = client.post("/api/bollinger/symbols", json={"symbol": "005930"})

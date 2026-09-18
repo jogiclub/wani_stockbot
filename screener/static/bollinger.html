@@ -119,7 +119,24 @@ async function refresh() {
   }
   $("#err").hidden = !STATE.error;
   if (STATE.error) $("#err").textContent = "봇 오류: " + STATE.error;
+  maybeKickRun();
   paint();
+}
+
+/* 감시 목록에 있는데 아직 판정 안 된 종목(방금 추가한 것)이 있으면 즉시 1회 판정을 돌린다.
+   봇 루프의 다음 주기(최대 poll_interval)까지 기다리지 않고 바로 채워진다.
+   같은 대기 집합에 대해 한 번만 쏜다(폴링마다 중복 요청 방지). */
+let KICKED = "";
+function maybeKickRun() {
+  const cfg = STATE.config || {};
+  const watched = cfg.symbols || [];
+  const judged = new Set((STATE.decisions || []).map(d => d["종목코드"]));
+  const pending = watched.filter(sym => !judged.has(sym));
+  const key = pending.slice().sort().join(",");
+  if (!pending.length) { KICKED = ""; return; }
+  if (STATE.running || key === KICKED) return;   // 봇이 돌면 곧 채워진다 / 이미 쏜 집합이면 재요청 안 함
+  KICKED = key;
+  fetch("/api/bollinger/run", { method: "POST" }).catch(() => { KICKED = ""; });
 }
 
 const DOT = { live: "bg-good dot-live", busy: "bg-warn dot-busy", err: "bg-bad", "": "bg-txt3" };
@@ -268,7 +285,16 @@ function pbGauge(v) {
 
 function renderWatch() {
   const rows = STATE.decisions || [];
-  if (!rows.length) { dropGrid(); $("#view").innerHTML = EMPTY("표시할 항목이 없습니다."); return; }
+  if (!rows.length) {
+    dropGrid();
+    // 방금 추가한 종목이 아직 판정 전이면 (maybeKickRun 이 1회 판정을 돌리는 중) 안내한다.
+    const cfg = STATE.config || {};
+    const pending = (cfg.symbols || []).length;
+    $("#view").innerHTML = EMPTY(pending
+      ? `종목을 판정하고 있습니다… (${pending}종목) 잠시 뒤 표시됩니다.`
+      : "감시할 종목이 없습니다. 오른쪽 위 <b>＋ 종목 추가</b> 로 넣으세요.");
+    return;
+  }
   if (GRID_KIND !== "watch") {
     GRID_KIND = "watch";
     GRID = Grid.create(gridHost(true), {

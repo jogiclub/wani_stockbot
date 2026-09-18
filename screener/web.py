@@ -728,6 +728,10 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
         added = symbol not in current
         if added:
             bot.update_config(replace(bot.cfg, symbols=current + (symbol,)))
+            # 새 종목의 지표를 **즉시 한 번** 판정해 둔다. 안 그러면 봇 루프의 다음 주기
+            # (최대 poll_interval)까지 반전매매 화면에 새 종목이 안 보여 한참 기다리게 된다.
+            # run_once 는 논블로킹 락이라 이미 도는 중이면 알아서 건너뛴다.
+            threading.Thread(target=bot.run_once, daemon=True).start()
         persisted = _bb_save(request, bot)
         return JSONResponse({"ok": True, "added": added, "symbol": symbol,
                              "symbols": list(bot.cfg.symbols),
