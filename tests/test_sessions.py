@@ -296,3 +296,54 @@ def test_settings_endpoint_keeps_credentials(client):
 def test_settings_endpoint_without_keys_is_rejected(client):
     r = client.post("/api/session/settings", json={"interval": 120})
     assert r.status_code == 400 and "API 키" in r.json()["detail"]
+
+
+# ------------------------------------------------------------------ 이메일 알림
+from screener.notifier import EmailNotifier, parse_emails  # noqa: E402
+
+MAIL = {"host": "smtp.test", "port": 587, "user": "from@test.com",
+        "password": "pw", "crypto": "tls", "from_name": "왔니 주식"}
+
+
+def test_alert_emails_parsed_and_deduped():
+    s = SessionSettings.from_body({"client_id": "tsck_live_abcd1234",
+                                   "client_secret": "tssk_live_secret",
+                                   "alert_emails": "A@A.com, a@a.com\nbad-addr; b@b.co"})
+    assert s.alert_emails == "a@a.com, b@b.co"      # 소문자·중복 제거·형식 검증
+    assert parse_emails(s.alert_emails) == ["a@a.com", "b@b.co"]
+
+
+def test_email_channel_attached_when_server_mail_set(tmp_path):
+    mgr = SessionManager(StrategyConfig.tuned(), cache_dir=tmp_path, workers=2,
+                         client_factory=FakeClient, mail=MAIL)
+    sess = mgr.create(settings(alert_emails="a@a.com, b@b.com"))
+    inner = sess.service.notifier.inner.notifiers      # DedupeNotifier→MultiNotifier
+    ems = [n for n in inner if isinstance(n, EmailNotifier)]
+    assert len(ems) == 1 and ems[0].recipients == ["a@a.com", "b@b.com"]
+    assert sess.info()["email_count"] == 2
+    mgr.stop_all()
+
+
+def test_no_email_channel_without_server_mail(tmp_path):
+    mgr = SessionManager(StrategyConfig.tuned(), cache_dir=tmp_path, workers=2,
+                         client_factory=FakeClient, mail=None)
+    sess = mgr.create(settings(alert_emails="a@a.com"))
+    assert sess.service.notifier is None               # 서버 발신 계정 없으면 채널 없음
+    assert sess.info()["email_count"] == 1             # 설정값은 보존
+    mgr.stop_all()
+
+
+def test_email_test_endpoint(tmp_path, monkeypatch):
+    sent = {}
+    monkeypatch.setattr(EmailNotifier, "_deliver",
+                        lambda self, subj, body: sent.update(to=self.recipients))
+    mgr = SessionManager(StrategyConfig.tuned(), cache_dir=tmp_path, workers=2,
+                         client_factory=FakeClient, mail=MAIL)
+    app = create_app(None, StrategyConfig.tuned(), interval=3600, top=0,
+                     workers=2, sessions=mgr)
+    with TestClient(app) as c:
+        r = c.post("/api/session/email/test", json={"alert_emails": "x@y.com"})
+        assert r.status_code == 200 and sent["to"] == ["x@y.com"]
+        bad = c.post("/api/session/email/test", json={"alert_emails": "not-an-email"})
+        assert bad.status_code == 400
+    mgr.stop_all()

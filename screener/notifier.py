@@ -7,12 +7,28 @@ import html
 import json
 import logging
 import re
+import smtplib
+import ssl
 from datetime import datetime
+from email.message import EmailMessage
+from email.utils import formataddr
 from pathlib import Path
 
 import requests
 
 from .pattern_detector import Signal
+
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def parse_emails(text: str) -> list[str]:
+    """콤마·세미콜론·공백·줄바꿈으로 나뉜 이메일 목록 → 검증 통과분만 (중복 제거, 소문자)."""
+    seen: dict[str, None] = {}
+    for tok in re.split(r"[\s,;]+", str(text or "")):
+        e = tok.strip().lower()
+        if e and EMAIL_RE.match(e):
+            seen.setdefault(e, None)
+    return list(seen)
 
 log = logging.getLogger(__name__)
 
@@ -151,6 +167,113 @@ def _telegram_hint(status: int, desc: str) -> str:
     if "not enough rights" in low or "kicked" in low:
         return "봇이 그 대화방에 메시지를 보낼 권한이 없습니다. 봇을 다시 초대하세요."
     return f"텔레그램 오류 ({status}): {desc}"
+
+
+class EmailNotifier(Notifier):
+    """세력 매집 돌파 시그널을 이메일(Gmail SMTP)로 보낸다.
+
+    발신 계정은 서버 공용(`MAIL_SMTP_*`), 수신 주소는 사용자가 여러 개 넣을 수 있다.
+    수신자끼리 서로의 주소가 보이지 않도록 **Bcc** 로 보낸다.
+    wani_v2 의 `Message_send_service.send_email` 과 같은 SMTP 계정·설정을 쓴다.
+    """
+
+    def __init__(self, recipients: list[str], *, host: str, port: int, user: str,
+                 password: str, crypto: str = "tls", from_name: str = "왔니 주식",
+                 timeout: float = 15.0):
+        self.recipients = list(recipients)
+        self.host, self.port, self.user, self.password = host, int(port), user, password
+        self.crypto = (crypto or "tls").lower()
+        self.from_name = from_name or "왔니 주식"
+        self.timeout = timeout
+
+    def ready(self) -> bool:
+        return bool(self.recipients and self.host and self.user and self.password)
+
+    def send(self, signals: list[Signal]) -> None:
+        if not signals or not self.ready():
+            return
+        n = len(signals)
+        head = signals[0]
+        subject = (f"[왔니 주식] 세력 매집 돌파 {head.name} 등 {n}종목"
+                   if n > 1 else f"[왔니 주식] 세력 매집 돌파 — {head.name}")
+        self._deliver(subject, self._html(signals))
+
+    def send_text(self, text: str) -> None:
+        """임의 텍스트 1건 (테스트·기타 알림)."""
+        if not self.ready():
+            return
+        first = text.strip().splitlines()[0] if text.strip() else "알림"
+        self._deliver(f"[왔니 주식] {first[:60]}",
+                      f"<pre style='font:14px/1.6 sans-serif'>{html.escape(text)}</pre>")
+
+    def check(self) -> str:
+        """설정 확인용 테스트 메일 1건. 성공하면 수신자 요약, 실패하면 EmailError."""
+        if not self.recipients:
+            raise EmailError("받는 사람 이메일을 한 개 이상 입력하세요.")
+        if not (self.host and self.user and self.password):
+            raise EmailError("서버에 이메일 발신 계정이 설정되지 않았습니다 (MAIL_SMTP_* 확인).")
+        self._deliver("[왔니 주식] 이메일 알림 테스트",
+                      "<p>이 메일이 보이면 세력추정매매 알림이 정상으로 설정됐습니다.</p>")
+        return f"{len(self.recipients)}명({', '.join(self.recipients[:3])}"
+        # 표시용 요약만 — 실제 수신자 전체를 응답에 담지 않는다
+
+    # ------------------------------------------------------------ 내부
+    def _html(self, signals: list[Signal]) -> str:
+        rows = []
+        for s in signals:
+            url = f"https://www.tossinvest.com/stocks/{s.symbol}"
+            grade = f"{s.score.total}점 {s.score.grade}" if s.score else ""
+            rows.append(
+                f"<tr>"
+                f"<td style='padding:8px 10px'><a href='{url}'>{html.escape(s.name)}</a>"
+                f"<br><span style='color:#888'>{s.symbol}</span></td>"
+                f"<td style='padding:8px 10px'>{grade}</td>"
+                f"<td style='padding:8px 10px;text-align:right'>매수 {s.entry:,.0f}<br>"
+                f"손절 {s.stop:,.0f} ({s.risk_pct:.1f}%)</td>"
+                f"<td style='padding:8px 10px;text-align:right'>전일고가 {s.prev_high:,.0f}<br>"
+                f"현재 {s.last_price:,.0f}</td></tr>")
+        return (
+            "<div style='font:14px/1.6 -apple-system,sans-serif;color:#222'>"
+            "<h2 style='margin:0 0 4px'>세력 매집 돌파 포착</h2>"
+            "<p style='color:#888;margin:0 0 12px'>바닥권 매집 뒤 전일 고가를 거래량과 함께 "
+            "돌파한 종목입니다. 투자 판단의 참고 자료이며 수익을 보장하지 않습니다.</p>"
+            "<table style='border-collapse:collapse;width:100%;max-width:640px'>"
+            "<thead><tr style='background:#f3f3f0;text-align:left'>"
+            "<th style='padding:8px 10px'>종목</th><th style='padding:8px 10px'>점수</th>"
+            "<th style='padding:8px 10px;text-align:right'>매수·손절</th>"
+            "<th style='padding:8px 10px;text-align:right'>가격</th></tr></thead>"
+            f"<tbody>{''.join(rows)}</tbody></table></div>")
+
+    def _deliver(self, subject: str, html_body: str) -> None:
+        msg = EmailMessage()
+        msg["Subject"] = subject
+        msg["From"] = formataddr((str(self.from_name), self.user))
+        msg["To"] = self.user                     # 자기 주소 (수신자는 Bcc 로 가린다)
+        msg["Bcc"] = ", ".join(self.recipients)
+        msg.set_content("HTML 메일입니다. HTML 을 지원하는 클라이언트에서 확인하세요.")
+        msg.add_alternative(html_body, subtype="html")
+        try:
+            if self.crypto == "ssl":
+                with smtplib.SMTP_SSL(self.host, self.port, timeout=self.timeout,
+                                      context=ssl.create_default_context()) as smtp:
+                    smtp.login(self.user, self.password)
+                    smtp.send_message(msg)
+            else:
+                with smtplib.SMTP(self.host, self.port, timeout=self.timeout) as smtp:
+                    smtp.ehlo()
+                    if self.crypto == "tls":
+                        smtp.starttls(context=ssl.create_default_context())
+                        smtp.ehlo()
+                    smtp.login(self.user, self.password)
+                    smtp.send_message(msg)
+        except (smtplib.SMTPAuthenticationError,) as exc:
+            raise EmailError("발신 계정 인증에 실패했습니다 (앱 비밀번호·계정 확인).") from exc
+        except (smtplib.SMTPException, OSError) as exc:
+            raise EmailError(f"메일 발송에 실패했습니다: {exc}") from exc
+
+
+class EmailError(RuntimeError):
+    """이메일 설정·전송 실패. 메시지는 화면에 그대로 보여줄 한국어 안내다."""
 
 
 class JsonFileNotifier(Notifier):

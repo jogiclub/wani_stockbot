@@ -27,3 +27,24 @@ def test_format_escapes_ampersand_in_name():
     """F&F·동국S&C 같은 종목명이 HTML 파싱을 깨지 않도록 이스케이프한다."""
     msg = TelegramNotifier("t", "c")._format(_signal(name="F&F"))
     assert "F&amp;F" in msg and "<b>F&F" not in msg
+
+
+# ------------------------------------------------------------------ 이메일
+from screener.notifier import EmailNotifier  # noqa: E402
+
+
+def test_email_notifier_builds_html_with_toss_link(monkeypatch):
+    delivered = {}
+    monkeypatch.setattr(EmailNotifier, "_deliver",
+                        lambda self, subj, body: delivered.update(subject=subj, body=body))
+    em = EmailNotifier(["a@a.com"], host="h", port=587, user="u@u.com", password="p")
+    em.send([_signal(symbol="005930", name="삼성전자")])
+    assert "삼성전자" in delivered["subject"]
+    assert "https://www.tossinvest.com/stocks/005930" in delivered["body"]
+
+
+def test_email_notifier_skips_without_recipients(monkeypatch):
+    called = []
+    monkeypatch.setattr(EmailNotifier, "_deliver", lambda self, s, b: called.append(1))
+    EmailNotifier([], host="h", port=587, user="u", password="p").send([_signal()])
+    assert called == []

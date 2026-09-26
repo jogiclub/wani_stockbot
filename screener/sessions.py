@@ -31,7 +31,7 @@ from .bollinger_bot import BollingerBot
 from .supply import SupplyConfig, SupplyScanner, SupplyService
 from .config import StrategyConfig
 from .data_loader import TossDataLoader
-from .notifier import DedupeNotifier, TelegramNotifier
+from .notifier import DedupeNotifier, EmailNotifier, MultiNotifier, TelegramNotifier, parse_emails
 from .scan_service import ScanService
 from .screener import Screener
 from .toss_client import TossAPIError, TossClient, token_cache_path
@@ -63,6 +63,9 @@ class SessionSettings:
     trading_opt_in: bool = False          # 서버가 실거래를 허용할 때만 의미가 있다
     telegram_bot_token: str = ""
     telegram_chat_id: str = ""
+    # 세력추정매매 새 시그널 이메일 알림 — 여러 주소를 콤마/줄바꿈으로 넣는다.
+    # 발신 계정은 서버 공용(MAIL_SMTP_*), 여기엔 받는 주소만 둔다.
+    alert_emails: str = ""
     # 세력추정매매 자동 매수 — 점수 컷오프 이상 시그널을 금액 안에서 최대 수량으로 산다.
     # 실주문은 trading_opt_in(+서버 스위치)일 때만, 아니면 모의로 기록만 한다.
     auto_buy: bool = False
@@ -96,6 +99,9 @@ class SessionSettings:
                                              d.telegram_bot_token)).strip()[:200],
             telegram_chat_id=str(body.get("telegram_chat_id",
                                           d.telegram_chat_id)).strip()[:64],
+            alert_emails=", ".join(parse_emails(
+                body.get("alert_emails", d.alert_emails))[:20])
+                if "alert_emails" in body else d.alert_emails,
             auto_buy=bool(body.get("auto_buy", d.auto_buy)),
             auto_buy_score=_int(body.get("auto_buy_score"), d.auto_buy_score, lo=0, hi=100),
             auto_buy_amount=_int(body.get("auto_buy_amount"), d.auto_buy_amount,
@@ -160,6 +166,8 @@ class UserSession:
             "max_order_amount": s.max_order_amount,
             "trading_opt_in": s.trading_opt_in,
             "telegram": bool(s.telegram_bot_token and s.telegram_chat_id),
+            "alert_emails": s.alert_emails,
+            "email_count": len(parse_emails(s.alert_emails)),
             "auto_buy": s.auto_buy,
             "auto_buy_score": s.auto_buy_score,
             "auto_buy_amount": s.auto_buy_amount,
@@ -188,6 +196,7 @@ class SessionManager:
                  idle_ttl: float = DEFAULT_IDLE_TTL,
                  max_sessions: int = DEFAULT_MAX_SESSIONS,
                  supply_interval: int = 60,
+                 mail: dict | None = None,
                  client_factory=TossClient):
         self.cfg = cfg
         self.cache_dir = Path(cache_dir)
@@ -195,6 +204,9 @@ class SessionManager:
         self.cache_ttl = cache_ttl
         self.trading_enabled = trading_enabled          # 서버 마스터 스위치
         self.max_order_amount = max_order_amount        # 서버 상한 (사용자는 더 낮게만 가능)
+        # 서버 공용 이메일 발신 계정 (수신 주소만 사용자 설정). None 이면 이메일 알림 비활성.
+        self.mail = mail if (mail and mail.get("host") and mail.get("user")
+                             and mail.get("password")) else None
         self.order_log = Path(order_log) if order_log else None
         self.bollinger_log = Path(bollinger_log) if bollinger_log else None
         self.idle_ttl = idle_ttl
@@ -274,10 +286,15 @@ class SessionManager:
         loader = TossDataLoader(client, markets=self.cfg.markets,
                                 cache_dir=self.cache_dir, cache_ttl=self.cache_ttl)
         telegram = None
-        notifier = None
+        channels: list = []
         if settings.telegram_bot_token and settings.telegram_chat_id:
             telegram = TelegramNotifier(settings.telegram_bot_token, settings.telegram_chat_id)
-            notifier = DedupeNotifier(telegram)
+            channels.append(telegram)
+        emails = parse_emails(settings.alert_emails)
+        if emails and self.mail:
+            channels.append(self._email_notifier(emails))
+        # 텔레그램·이메일을 한 래퍼로 묶고 중복 시그널을 한 번만 보낸다.
+        notifier = DedupeNotifier(MultiNotifier(*channels)) if channels else None
         service = ScanService(Screener(loader, self.cfg, max_workers=self.workers),
                               interval=settings.interval, top=settings.top,
                               limit=settings.limit, live=settings.live,
@@ -320,6 +337,14 @@ class SessionManager:
         return sess
 
     # ------------------------------------------------------------- 내부
+    def _email_notifier(self, recipients: list[str]) -> EmailNotifier:
+        """서버 공용 발신 계정으로 보내는 이메일 채널을 만든다 (수신자만 사용자별)."""
+        m = self.mail
+        return EmailNotifier(recipients, host=m["host"], port=m.get("port", 587),
+                             user=m["user"], password=m["password"],
+                             crypto=m.get("crypto", "tls"),
+                             from_name=m.get("from_name", "왔니 주식"))
+
     def _verify(self, client: TossClient) -> None:
         """실제 호출로 자격증명을 검증한다 (토큰 발급 + 가벼운 시세 조회)."""
         try:

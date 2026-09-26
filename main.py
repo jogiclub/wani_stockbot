@@ -201,6 +201,10 @@ def cmd_web(args, app, cfg):
         bollinger_log=app.order_log.parent / "bollinger.log",
         max_sessions=args.max_sessions,
         supply_interval=args.supply_interval,
+        mail={"host": app.mail_smtp_host, "port": app.mail_smtp_port,
+              "user": app.mail_smtp_user, "password": app.mail_smtp_pass,
+              "crypto": app.mail_smtp_crypto, "from_name": app.mail_from_name}
+             if app.mail_enabled else None,
     ) if args.source == "toss" else None
 
     notifier = None
@@ -218,6 +222,8 @@ def cmd_web(args, app, cfg):
         )
         print(f"주문 기능: {'실거래 ON ⚠' if trading.enabled else '모의(dry-run) 전용'}"
               f" · 1회 한도 {int(app.max_order_amount):,}원")
+
+    print(f"이메일 알림: {'가능 (' + app.mail_smtp_user + ')' if app.mail_enabled else '꺼짐 (MAIL_SMTP_PASS 미설정)'}")
 
     # 볼린저 반전 매매 봇 (서버 기본 자격증명용). 만들어만 두고 자동 시작하지 않는다.
     bollinger = None

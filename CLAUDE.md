@@ -21,7 +21,7 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 | `screener/data_loader.py` | `DataLoader` 인터페이스 + `TossDataLoader` / `CsvDataLoader` / `SyntheticDataLoader`, 일봉 디스크 캐시 |
 | `screener/pattern_detector.py` | STEP1~3 판정 엔진 (`enrich`, `PatternDetector`, `BaseCandle`, `Signal`) |
 | `screener/screener.py` | 유니버스 필터 → 병렬 스캔 → 시그널 집계 (`Screener`, `ScanReport`) |
-| `screener/notifier.py` | 콘솔 표 / 텔레그램 / JSONL / 중복제거 래퍼 |
+| `screener/notifier.py` | 콘솔 표 / 텔레그램 / **이메일(Gmail SMTP)** / JSONL / 중복제거 래퍼 |
 | `screener/trading.py` | 토스 주문 실행 (`TradingService`) — 매수 + OCO 손절·익절 |
 | `screener/evidence.py` | 백테스트 실측 근거 수치의 **단일 출처**. README·CLAUDE.md·`/api/guide` 가 모두 참조 |
 | `screener/regime.py` | 시장 국면 판정 (`MarketRegime`) — 지수 vs 이동평균 |
@@ -310,6 +310,22 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
   (미리보기는 `disable_web_page_preview=True` 로 끔). HTML 모드라 종목명은 `html.escape` 한다.
 - Chat ID 확인: 봇에게 먼저 메시지를 보낸 뒤 `https://api.telegram.org/bot<토큰>/getUpdates`.
 
+## 이메일 알림 (screener/notifier.py · EmailNotifier)
+- **세력추정매매에 새 시그널이 올라오면 이메일 발송.** 텔레그램과 같은 지점(`ScanService.notifier`)에서
+  나가고 `DedupeNotifier` 로 중복 제거, 여러 채널은 `MultiNotifier` 로 묶는다.
+- **발신 계정은 서버 공용**(`.env` 의 `MAIL_SMTP_*`), **수신 주소만 사용자가 설정 창에 입력**한다
+  (⚙ 설정 → 이메일 알림, 여러 개는 콤마·줄바꿈). `SessionSettings.alert_emails` 로 저장(암호화 아님).
+  `parse_emails` 로 형식 검증·소문자화·중복 제거(최대 20개). 수신자끼리 주소가 안 보이게 **Bcc** 로 보낸다.
+- SMTP 설정은 **wani_v2 `application/libraries/Message_send_service.php` 의 `send_email` 과 동일**:
+  `smtp.gmail.com:587` TLS, 계정 `hello@webhows.com` + **Gmail 앱 비밀번호**. `AppConfig.mail_*`
+  (`.env` 우선). **비밀번호는 코드 fallback 없이 `MAIL_SMTP_PASS` 에서만** 읽는다.
+  `.env` 는 값에 공백이 있어도(`앱 비밀번호`, `왔니 주식`) 따옴표 없이 그대로 둔다.
+- 서버에 발신 계정이 없으면(`AppConfig.mail_enabled=False`) 설정 창의 이메일 섹션이 숨는다.
+  `SessionManager(mail=...)` 로 발신 계정을 넘긴다(`main.py`). `mail_enabled` 를 `/api/session` 이 내려준다.
+- 설정 창 **"테스트 전송"** → `POST /api/session/email/test` (입력 비면 저장값). `EmailNotifier.check()` 가
+  1건 실제 발송, 실패 시 `EmailError` 한국어 안내(401=앱 비밀번호 확인 등)를 400 으로. 응답에 수신자 전체를 담지 않는다.
+- 메일은 HTML(종목·점수·매수/손절/가격 표) + 토스 링크. 종목명은 `html.escape`.
+
 ## 공통 GNB · 정적 파일 (2026-09-18 Tailwind + AG Grid 전환)
 - `<head>` 스크립트 순서(모든 화면 동일): **tailwind CDN → `/static/ui.js` → ag-grid CDN → `/static/common.css`
   → gnb.js → session.js → (dashboard·supply 만) stockmenu.js.** ui.js 가 tailwind.config 를 세팅하므로
@@ -597,6 +613,10 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 - 주석·출력 문구는 한국어로 통일한다.
 
 ## 변경 이력
+- 2026-09-26: **세력추정매매 이메일 알림 추가** — `EmailNotifier`(Gmail SMTP, Bcc, HTML+토스 링크),
+  `SessionSettings.alert_emails`(여러 주소), 설정 창 이메일 섹션·테스트 전송(`POST /api/session/email/test`).
+  발신 계정은 서버 `.env`(`MAIL_SMTP_*`, wani_v2 와 동일 계정), 수신만 사용자별. `AppConfig.mail_*`,
+  `SessionManager(mail=...)`. SMTP 로그인 실검증 완료. 테스트 245개 통과.
 - 2026-09-18: **볼린저 매수를 지정가+미체결 회수로 전환** — `TradingService.limit_buy`(지정가 = 현재가
   ×(1+`buy_slippage`, 기본 0.5%), `buy_cancel_after` 초 미체결 시 백그라운드 취소). 매도는 시장가 유지.
   `BollingerConfig.buy_slippage`·`buy_cancel_after` 추가, 설정 창 노출, 멱등키 태그 분리. 테스트 239개 통과.

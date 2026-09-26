@@ -35,7 +35,7 @@ from .bollinger_bot import BollingerBot
 from .supply import SupplyConfig, SupplyService, SupplyState
 from .config import StrategyConfig
 from .data_loader import DataLoader
-from .notifier import Notifier, TelegramError, TelegramNotifier
+from .notifier import EmailError, Notifier, TelegramError, TelegramNotifier, parse_emails
 from .scan_service import ScanService, ScanState, _now
 from .screener import Screener
 from .sessions import COOKIE_NAME, SessionError, SessionManager, SessionSettings, UserSession
@@ -60,6 +60,7 @@ __all__ = ["ScanService", "ScanState", "create_app"]
 _SETTING_KEYS = frozenset({
     "top", "interval", "limit", "live", "account_seq", "max_order_amount",
     "trading_opt_in", "telegram_bot_token", "telegram_chat_id",
+    "alert_emails",
     "auto_buy", "auto_buy_score", "auto_buy_amount",
 })
 
@@ -477,6 +478,7 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
             # 개인 키 없이 서버 계좌로 주문·봇을 쓸 수 있는가 (관리자만)
             "server_trading": _server_trading(request) is not None,
             "persisted": store is not None,
+            "mail_enabled": bool(sessions and sessions.mail),
         }
         if sess is not None:
             return JSONResponse({**body, **sess.info()})
@@ -584,6 +586,28 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
         except TelegramError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return JSONResponse({"ok": True, "chat": where})
+
+    @app.post("/api/session/email/test")
+    def session_email_test(request: Request, body: dict) -> JSONResponse:
+        """설정 창의 이메일 '테스트 전송'. 입력한 주소로 실제 메일을 1건 보낸다.
+
+        입력이 비어 있으면 저장된 세션 값으로 확인한다. 발신 계정은 서버 공용이다.
+        """
+        if sessions is None or not sessions.mail:
+            raise HTTPException(status_code=503,
+                                detail="서버에 이메일 발신 계정이 설정되지 않았습니다.")
+        raw = str(body.get("alert_emails", "")).strip()
+        sess = _session(request)
+        if not raw and sess is not None:
+            raw = sess.settings.alert_emails
+        emails = parse_emails(raw)
+        if not emails:
+            raise HTTPException(status_code=400, detail="받는 사람 이메일을 한 개 이상 입력하세요.")
+        try:
+            sent = sessions._email_notifier(emails).check()
+        except EmailError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return JSONResponse({"ok": True, "sent": sent})
 
     @app.get("/api/guide")
     def guide() -> JSONResponse:

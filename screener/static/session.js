@@ -107,6 +107,20 @@
       </div>
     </fieldset>
 
+    <fieldset id="f-email-set" class="${c.fieldset}">
+      <legend class="${c.legend}">이메일 알림 (선택)</legend>
+      <div class="mb-2.5">
+        <label class="${c.label}" for="f-emails">받는 사람 이메일 — 세력추정매매 새 시그널</label>
+        <textarea class="${c.input} !h-20 resize-y" id="f-emails" autocomplete="off"
+          placeholder="여러 개면 콤마·줄바꿈으로 구분 (예: a@a.com, b@b.com)"></textarea>
+        <div class="${c.hint}" id="f-email-hint">비워 두면 이메일을 보내지 않습니다.</div>
+      </div>
+      <div class="${ACT}">
+        <button class="${c.btn} !text-[12.5px] !px-2.5 !py-1.5" id="f-em-test">테스트 전송</button>
+        <span class="text-[11.5px] text-txt3" id="f-em-note"></span>
+      </div>
+    </fieldset>
+
     <fieldset id="f-trade-set" class="${c.fieldset}">
       <legend class="${c.legend}">주문 (선택)</legend>
       <div class="${ROW}">
@@ -194,6 +208,10 @@
     $("#f-account").value = s.account_seq ?? "";
     $("#f-max").value = s.max_order_amount ?? s.server_max_order_amount ?? 1000000;
     $("#f-optin").checked = !!s.trading_opt_in;
+    $("#f-emails").value = s.alert_emails || "";
+    $("#f-email-set").hidden = !s.mail_enabled;      // 서버에 발신 계정이 없으면 숨긴다
+    emNote(s.mail_enabled ? "" : "서버에 이메일 발신 계정이 없어 비활성화됩니다.",
+           s.mail_enabled ? "" : "bad");
     $("#f-auto").checked = !!s.auto_buy;
     $("#f-auto-score").value = s.auto_buy_score ?? 75;
     $("#f-auto-amount").value = s.auto_buy_amount || "";
@@ -249,6 +267,7 @@
   function msg(text, kind = "") { note("#f-msg", MSG, text, kind); }
   function pmsg(text, kind = "") { note("#p-msg", MSG, text, kind); }
   function tgNote(text, kind = "") { note("#f-tg-note", "text-[11.5px]", text, kind); }
+  function emNote(text, kind = "") { note("#f-em-note", "text-[11.5px]", text, kind); }
 
   function note(sel, base, text, kind) {
     const el = $(sel);
@@ -282,6 +301,25 @@
     };
 
     // 🔑 API 키 — 자격증명만 보낸다. 나머지 설정은 서버가 저장값을 이어받는다.
+    $("#f-em-test").onclick = async () => {
+      const btn = $("#f-em-test");
+      btn.disabled = true;
+      emNote("전송 중…");
+      try {
+        const r = await fetch("/api/session/email/test", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ alert_emails: $("#f-emails").value.trim() }),
+        });
+        const out = await r.json();
+        if (r.ok) emNote(`전송 성공 — ${out.sent} 받은편지함(스팸함 포함)을 확인하세요.`, "ok");
+        else emNote(out.detail || "전송 실패", "bad");
+      } catch (e) {
+        emNote("서버에 연결하지 못했습니다: " + e, "bad");
+      } finally {
+        btn.disabled = false;
+      }
+    };
+
     $("#f-save").onclick = async () => {
       const body = {
         client_id: $("#f-id").value.trim(),
@@ -320,6 +358,7 @@
         trading_opt_in: $("#f-optin").checked,
         telegram_bot_token: $("#f-tg-token").value.trim(),
         telegram_chat_id: $("#f-tg-chat").value.trim(),
+        alert_emails: $("#f-emails").value.trim(),
         auto_buy: $("#f-auto").checked,
         auto_buy_score: Number($("#f-auto-score").value || 75),
         auto_buy_amount: Number($("#f-auto-amount").value || 0),

@@ -122,6 +122,22 @@ class AppConfig:
     telegram_chat_id: str = field(default_factory=lambda: os.getenv("TELEGRAM_CHAT_ID", ""))
     cache_dir: Path = field(default_factory=lambda: PROJECT_ROOT / "cache")
 
+    # ---- 이메일 알림 (Gmail SMTP) ----
+    # 발신 계정은 서버 공용이다(수신 주소만 사용자가 설정 창에 넣는다).
+    # wani_v2 의 Message_send_service.send_email 과 같은 계정·설정을 쓴다.
+    # **비밀번호는 fallback 없이 `.env`(MAIL_SMTP_PASS)에서만** 읽는다 — 코드에 두지 않는다.
+    mail_smtp_host: str = field(default_factory=lambda: os.getenv("MAIL_SMTP_HOST", "smtp.gmail.com"))
+    mail_smtp_user: str = field(default_factory=lambda: os.getenv("MAIL_SMTP_USER", "hello@webhows.com"))
+    mail_smtp_pass: str = field(default_factory=lambda: os.getenv("MAIL_SMTP_PASS", ""))
+    mail_smtp_port: int = field(default_factory=lambda: int(os.getenv("MAIL_SMTP_PORT", "587")))
+    mail_smtp_crypto: str = field(default_factory=lambda: os.getenv("MAIL_SMTP_CRYPTO", "tls"))
+    mail_from_name: str = field(default_factory=lambda: os.getenv("MAIL_FROM_NAME", "왔니 주식"))
+
+    @property
+    def mail_enabled(self) -> bool:
+        """발신 계정·비밀번호가 갖춰졌는가 (서버에서 이메일을 보낼 수 있는가)."""
+        return bool(self.mail_smtp_host and self.mail_smtp_user and self.mail_smtp_pass)
+
     # ---- 실거래 (기본 OFF) ----
     # 켜기 전에 반드시 모의(dry-run)로 흐름을 확인할 것. 실제 돈이 나간다.
     trading_enabled: bool = field(
