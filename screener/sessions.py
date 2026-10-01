@@ -321,8 +321,7 @@ class SessionManager:
 
         # 수급 포착 매매 — 시세만 보므로 주문과 무관하다. 장중에만 촘촘히 돈다.
         supply = SupplyService(SupplyScanner(loader, SupplyConfig(), max_workers=self.workers),
-                               interval=self.supply_interval,
-                               notify=telegram.send_text if telegram else None)
+                               interval=self.supply_interval)
 
         sess = UserSession(sid=secrets.token_urlsafe(24), settings=settings,
                            client=client, service=service, trading=trading,

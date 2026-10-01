@@ -306,7 +306,7 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 - 응답에 토큰·챗ID 를 절대 담지 않는다. 성공 시 대화방 표시명만 돌려준다.
 - 시그널 알림은 **새 시그널이 있을 때만** 나간다(`TelegramNotifier.send` 는 빈 목록이면 무시,
   `DedupeNotifier` 가 중복 제거). 조용한 게 정상일 수 있다.
-- 세력추정매매(`_format`)·수급포착 알림 모두 **토스 종목 페이지 링크**를 raw URL 로 함께 보낸다
+- 세력추정매매 알림(`_format`)은 **토스 종목 페이지 링크**를 raw URL 로 함께 보낸다
   (미리보기는 `disable_web_page_preview=True` 로 끔). HTML 모드라 종목명은 `html.escape` 한다.
 - Chat ID 확인: 봇에게 먼저 메시지를 보낸 뒤 `https://api.telegram.org/bot<토큰>/getUpdates`.
 
@@ -530,7 +530,7 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 
 - **'진입'(`decide_entry`, 들어갈 만한 것)** — status 는 그대로 두고 **별도 플래그**로 여러 지표를 종합한다:
   수급 지속 + 갭 과열 아님 + 고점권 아님 + 종합 점수 ≥ `entry_score_min`(기본 70).
-  화면은 🔥 배지·필터·근거로 강조하고, **텔레그램은 이 진입 종목만** 보낸다. `entry_reasons` 에 근거를 담는다.
+  화면은 🔥 배지·필터·근거로 강조한다(텔레그램 발송 없음). `entry_reasons` 에 근거를 담는다.
   `_enrich` 에서 투자자(+5점) 반영 후 `rescore`→`decide_entry` 를 다시 불러 최종 판정한다. 정렬도 진입 우선.
   **이 컷오프도 백테스트로 검증된 값이 아니다**(경험칙) — 재료·뉴스·공시는 사람이 확인한다.
 - 손절선 = 5분봉 20이평(`minute_ma`, **완성된 5분봉만** — label=right), 형성 전(대략 10:40 전)엔 VWAP.
@@ -560,10 +560,7 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 - 일봉은 세력추정 스캐너와 같은 `ohlcv(sym, 260)` 캐시를 공유한다.
 - `SupplyService` 는 **장중 `interval`(기본 60초, `--supply-interval`), 장 밖 30분**에 한 번 돈다.
   화면을 열었는데 결과가 없으면 `/api/supply/state` 가 즉시 1회 스캔을 띄운다.
-  텔레그램은 **장중에 새로 '진입'(`SupplySignal.entry`)이 된 종목만**, (기준일, 종목)당 1회 보낸다
-  (2026-09-18: 예전엔 '지속' 전체를 보냈으나, 갭 과열·고점권까지 걸러낸 진입 후보만 보내도록 바꿈).
-  메시지에 **토스 종목 페이지 링크**(`https://www.tossinvest.com/stocks/{코드}`)를 함께 싣는다.
-  `TelegramNotifier` 가 HTML 모드라 종목명은 `html.escape` 한다(F&F 등 `&` 안전).
+  **수급포착은 텔레그램 알림을 보내지 않는다** (2026-10-01 제거 — `SupplyService` 에 `notify` 없음, 화면 확인 전용).
 - 세션마다 수급 스레드가 1개 더 뜬다(세션 생성 시 시작, `close()` 에서 정지).
 - JSON 으로 나가는 값은 `clean()` 으로 NaN → null 처리한다 (Starlette 는 NaN 을 거부한다).
 
@@ -613,6 +610,7 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 - 주석·출력 문구는 한국어로 통일한다.
 
 ## 변경 이력
+- 2026-10-01: **수급포착매매 텔레그램 알림 제거** (`SupplyService.notify`·`_alert`, main/sessions 배선, 화면 문구). 테스트 245개 통과.
 - 2026-09-26: **세력추정매매 이메일 알림 추가** — `EmailNotifier`(Gmail SMTP, Bcc, HTML+토스 링크),
   `SessionSettings.alert_emails`(여러 주소), 설정 창 이메일 섹션·테스트 전송(`POST /api/session/email/test`).
   발신 계정은 서버 `.env`(`MAIL_SMTP_*`, wani_v2 와 동일 계정), 수신만 사용자별. `AppConfig.mail_*`,

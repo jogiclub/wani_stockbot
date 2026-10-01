@@ -26,7 +26,6 @@
 
 from __future__ import annotations
 
-import html
 import logging
 import threading
 import time
@@ -604,15 +603,12 @@ class SupplyService:
     """
 
     def __init__(self, scanner: SupplyScanner, interval: int = 60, idle_interval: int = 1800,
-                 notify: Callable[[str], object] | None = None,
                  clock: Callable[[], datetime] = datetime.now):
         self.scanner = scanner
         self.interval = interval
         self.idle_interval = idle_interval
-        self.notify = notify
         self.clock = clock
         self.state = SupplyState()
-        self._alerted: set[tuple[str, str]] = set()   # (기준일, 종목) — 같은 날 한 번만 알린다
         self._lock = threading.Lock()
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -642,7 +638,6 @@ class SupplyService:
                 report.scanned, report.skipped, report.errors)
             self.state.duration = round(time.monotonic() - t0, 1)
             self.state.finished_at = _now()
-            self._alert(report.signals)
         except Exception as exc:
             self.state.error = f"{type(exc).__name__}: {exc}"
             self.state.finished_at = _now()
@@ -653,33 +648,6 @@ class SupplyService:
             self.state.running = False
             self._lock.release()
         return self.state
-
-    def _alert(self, signals: list[SupplySignal]) -> None:
-        """여러 지표를 통과해 **'진입'(들어갈 만한 것)** 이 된 종목만 알린다 (장중에만).
-
-        예전에는 '지속' 종목을 모두 보냈으나, 단발 재료·고점권까지 걸러낸 진입 후보만
-        보내도록 바꿨다 (기준일·종목당 한 번). 화면에는 지속·약화 등 전체가 그대로 보인다.
-        """
-        if self.notify is None or not self.market_open():
-            return
-        fresh = [s for s in signals if s.entry
-                 and (s.session.isoformat(), s.symbol) not in self._alerted]
-        if not fresh:
-            return
-        lines = ["🔥 [수급포착] 진입 적합 종목 — 재료(뉴스·공시)는 직접 확인하세요"]
-        for s in fresh:
-            self._alerted.add((s.session.isoformat(), s.symbol))
-            # 토스 종목 페이지 링크를 함께 보낸다. TelegramNotifier 는 HTML 모드라
-            # 종목명은 이스케이프하고(F&F 같은 & 안전), 링크는 raw URL 로 둬 눈에 보이게 한다.
-            url = f"https://www.tossinvest.com/stocks/{s.symbol}"
-            lines.append(f"· {html.escape(s.name)}({s.symbol}) "
-                         f"{s.price:,.0f}원 {s.change * 100:+.1f}% · "
-                         f"급증 {s.surge_ratio * 100:.0f}% · 매수 {s.buy_ratio * 100:.0f}% · "
-                         f"손절 {s.stop:,.0f} · {s.score}점\n  {url}")
-        try:
-            self.notify("\n".join(lines))
-        except Exception as exc:
-            log.warning("수급 알림 실패: %s", exc)
 
     def due(self) -> bool:
         """지금 다시 스캔할 차례인가."""

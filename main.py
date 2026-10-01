@@ -243,10 +243,7 @@ def cmd_web(args, app, cfg):
         from screener.supply import SupplyConfig, SupplyScanner, SupplyService
         supply = SupplyService(
             SupplyScanner(loader, SupplyConfig(), max_workers=args.workers),
-            interval=args.supply_interval,
-            notify=(TelegramNotifier(app.telegram_bot_token, app.telegram_chat_id).send_text
-                    if app.telegram_bot_token and app.telegram_chat_id and not args.no_telegram
-                    else None))
+            interval=args.supply_interval)
 
     # 로그인·설정 저장소 (SQLite). `--no-login` 이면 예전처럼 인증 없이 뜬다.
     store = None

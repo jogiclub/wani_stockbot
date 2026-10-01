@@ -252,27 +252,21 @@ def test_chart_payload_matches_evaluation():
     assert len(ch["profile"]) == 60 and ch["profile"][-1]["expected"] > 0
 
 
-def test_service_alerts_once_per_symbol_during_market():
-    sent: list[str] = []
+def test_service_state_is_json_safe_during_market():
     svc = SupplyService(SupplyScanner(FakeSupplyLoader(), SupplyConfig(min_price=0)),
-                        notify=sent.append, clock=lambda: datetime(2026, 9, 16, 10, 30))
+                        clock=lambda: datetime(2026, 9, 16, 10, 30))
     svc.scan_once()
-    svc.scan_once()
-    assert len(sent) == 1 and "지속주" in sent[0] and "진입" in sent[0]
-    assert "https://www.tossinvest.com/stocks/000001" in sent[0]   # 토스 링크 동봉
     state = svc.state.as_dict()
     json.dumps(state, allow_nan=False)
     assert state["session"] == DAY.isoformat() and state["market_open"] is True
 
 
-def test_service_is_quiet_outside_market_hours():
-    sent: list[str] = []
+def test_service_scans_rarely_outside_market_hours():
     svc = SupplyService(SupplyScanner(FakeSupplyLoader(), SupplyConfig(min_price=0)),
-                        notify=sent.append, interval=60, idle_interval=1800,
+                        interval=60, idle_interval=1800,
                         clock=lambda: datetime(2026, 9, 16, 21, 0))
     assert svc.due() is True
     svc.scan_once()
-    assert sent == []
     assert svc.due() is False                               # 장 밖에서는 30분에 한 번만
 
 
@@ -371,12 +365,10 @@ def test_watch_status_is_not_entry():
     assert sig.status == STATUS_WATCH and sig.entry is False
 
 
-def test_alert_skips_non_entry_hold():
-    """지속이지만 진입 조건 미달(점수 컷오프 초과)이면 알림을 보내지 않는다."""
-    sent: list[str] = []
+def test_non_entry_hold_is_flagged_false():
+    """지속이지만 진입 조건 미달(점수 컷오프 초과)이면 진입 플래그가 꺼진다."""
     svc = SupplyService(SupplyScanner(FakeSupplyLoader(),
                                       SupplyConfig(min_price=0, entry_score_min=101)),
-                        notify=sent.append, clock=lambda: datetime(2026, 9, 16, 10, 30))
+                        clock=lambda: datetime(2026, 9, 16, 10, 30))
     svc.scan_once()
-    assert sent == []
     assert svc.state.signals[0]["상태"] == STATUS_HOLD and svc.state.signals[0]["진입"] is False
