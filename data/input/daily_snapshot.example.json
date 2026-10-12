@@ -1,0 +1,49 @@
+{
+  "run_date": "2026-04-17",
+  "snapshots": [
+    {
+      "code": "005930",
+      "name": "Samsung Electronics",
+      "market": "KOSPI",
+      "instrument_type": "STOCK",
+      "is_managed": false,
+      "is_halted": false,
+      "foreign_positive_days_last_3": 3,
+      "foreign_positive_streak_last_3": 3,
+      "foreign_net_buy_1d_krw": 4200000000,
+      "foreign_net_buy_3d_krw": 24000000000,
+      "foreign_sell_streak_days": 0,
+      "institution_positive_days_last_3": 2,
+      "institution_net_buy_1d_krw": 1800000000,
+      "institution_net_buy_3d_krw": 5200000000,
+      "institution_rank_percentile": 0.12,
+      "institution_turned_to_sell": false,
+      "avg_trading_value_last_3d_krw": 78000000000,
+      "avg_trading_value_prev_3d_krw": 60000000000,
+      "market_cap_krw": 430000000000000,
+      "current_price": 84500,
+      "moving_average_20": 83200,
+      "highest_price_20d": 87000,
+      "price_change_5d_pct": 4.2,
+      "volume_spike": false,
+      "source_snapshots": [
+        {
+          "source": "KRX",
+          "captured_at": "2026-04-17T16:05:00+09:00",
+          "foreign_net_buy_1d_krw": 4200000000,
+          "foreign_net_buy_3d_krw": 24000000000,
+          "institution_net_buy_1d_krw": 1800000000,
+          "institution_net_buy_3d_krw": 5200000000
+        },
+        {
+          "source": "NAVER",
+          "captured_at": "2026-04-17T16:07:00+09:00",
+          "foreign_net_buy_1d_krw": 4200000000,
+          "foreign_net_buy_3d_krw": 24000000000,
+          "institution_net_buy_1d_krw": 1800000000,
+          "institution_net_buy_3d_krw": 5200000000
+        }
+      ]
+    }
+  ]
+}
