@@ -1,11 +1,12 @@
 /* 공통 GNB(전역 내비게이션) + 테마 토글.
-   세 화면(수급포착매매·세력추정매매·볼린저 반전 매매)이 같은 마크업을 쓰도록 JS 로 한 번만 그린다.
+   네 화면(수급포착·세력추정·볼린저 반전·금요일 마감 돌파)이 같은 마크업을 쓰도록 JS 로 한 번만 그린다.
    페이지는 <div class="gnb-actions"> 안에 자기 버튼을 넣어 두면 오른쪽에 합쳐진다. */
 (function () {
   const MENU = [
     { href: "/supply", label: "수급포착매매", key: "supply" },
     { href: "/", label: "세력추정매매", key: "screener" },
     { href: "/bollinger", label: "볼린저 밴드 반전 매매", key: "bollinger" },
+    { href: "/friday", label: "금요일 마감 돌파", key: "friday" },
   ];
 
   /* 테마: 저장값 → ?theme= 딥링크 → 시스템 기본 순. 페인트 전에 적용해 깜빡임을 막는다. */

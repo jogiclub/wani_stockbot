@@ -130,7 +130,7 @@ def test_watch_trigger_is_prev_high_like_signal():
 
 def test_dashboard_has_stock_menu(client):
     """종목 메뉴는 공통 모듈(stockmenu.js)이다 — 세력추정·수급포착 두 화면이 함께 쓴다."""
-    for page in ("/", "/supply"):
+    for page in ("/", "/supply", "/friday"):
         assert "/static/stockmenu.js" in client.get(page).text
     js = client.get("/static/stockmenu.js").text
     assert 'id="stock-menu"' in js

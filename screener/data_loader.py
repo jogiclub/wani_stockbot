@@ -220,6 +220,26 @@ class TossDataLoader(DataLoader):
         raw = self._cached_json(key, 10 * 365 * 86400, fetch) or []
         return pd.Series({int(k): v for k, v in raw}, dtype=float).sort_index()
 
+    def price_at(self, symbol: str, day, minutes: int = 30) -> float:
+        """과거 영업일 `day` 의 09:00+minutes 분 시점 가격(그 시각까지 마지막 정규장 봉 종가).
+
+        금요일 마감 매매의 월요일 09:30 결과 채우기용. 지나간 날이라 영구 캐시한다.
+        봉이 없으면 NaN.
+        """
+        from .supply import session_bars
+
+        key = f"intraday/{symbol}_{day.isoformat()}_px{minutes}.json"
+
+        def fetch():
+            end = pd.Timestamp.combine(day, pd.Timestamp("09:00").time()) + pd.Timedelta(minutes=minutes)
+            page = self.client.candles_page(symbol, "1m", 200,
+                                            end.strftime("%Y-%m-%dT%H:%M:59+09:00"))
+            df = session_bars(candles_to_df(page.get("candles") or []), day)
+            return float(df["close"].iloc[-1]) if not df.empty else None
+
+        raw = self._cached_json(key, 10 * 365 * 86400, fetch)
+        return float("nan") if raw is None else float(raw)
+
     def investor_flow(self, symbol: str, session) -> dict:
         """판정일의 외국인·기관·프로그램 순매수 (주, 장중 잠정치). 5분 캐시."""
         def fetch():

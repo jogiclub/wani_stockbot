@@ -3,8 +3,8 @@
 > 이 문서는 프로젝트 지침서다. **새로 확인된 사실·결정·API 스펙은 여기에 계속 누적 기록한다.**
 
 ## 프로젝트 목표
-세 전략을 한 대시보드에서 돌린다. 상단 GNB 로 화면을 오간다 (브랜드: **왔니 주식**).
-GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반전 매매**.
+네 전략을 한 대시보드에서 돌린다. 상단 GNB 로 화면을 오간다 (브랜드: **왔니 주식**).
+GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반전 매매 → 금요일 마감 돌파**.
 
 0. **수급포착매매** (`/supply`) — 장 초반 거래량 급증 + 수급 연속성으로 주도주를 포착하는
    관찰용 스크리너. 주문 없음, **백테스트 미검증** (아래 "수급 포착 매매" 절).
@@ -12,6 +12,10 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
    매물 소화(조정) → **전일 고가**를 거래량과 함께 돌파하는 순간을 포착해 KOSPI/KOSDAQ 을 스크리닝.
 2. **볼린저 밴드 반전 매매** (`/bollinger`) — 박스권에서 밴드 하한 + RSI 과매도에 사고
    상한 + 과매수에 파는 평균 회귀 전략. **토스 OpenAPI 로 실제 시장가 매수·매도까지 자동 실행**한다.
+
+3. **금요일 마감 돌파** (`/friday`) — 주말 직전 영업일 14:30~15:15 에 거래량 급증 + 당일 고점 돌파 종목을
+   포착하는 **관찰 전용**(주문 없음) 스크리너. P0 일봉 대리 백테스트 **'조건부'**, 분봉 성과는 포워드 기록 중
+   (아래 "금요일 마감 돌파" 절).
 
 ## 모듈 구조
 | 파일 | 역할 |
@@ -28,6 +32,9 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 | `screener/scoring.py` | 진입 점수 100점 산정 (`score_signal`) — 배점은 백테스트 실측 기반 |
 | `screener/backtest.py` | 백테스트 엔진. `Backtester`(시그널 재현 + 청산 시뮬), `ExitPolicy`, `Trade`, `BacktestResult` |
 | `screener/supply.py` | 수급 포착 매매 (`SupplyConfig`·`evaluate`·`SupplyScanner`·`SupplyService`) |
+| `screener/friday.py` | 금요일 마감 돌파 (`FridayConfig`·`evaluate`·`FridayScanner`·`FridayService`·`FridayRecorder`·`build_report`) |
+| `screener/friday_backtest.py` | 금요일 마감 돌파 P0 일봉 대리 백테스트 (`ProxyParams`·`proxy_frame`·`analyze`·`run_proxy_from_cache`) |
+| `screener/static/friday.html` | 금요일 마감 돌파 화면 (`/friday`). 포착 종목·포워드 기록·가이드 근거 3탭 |
 | `screener/static/supply.html` | 수급포착매매 화면 (`/supply`). 당일 1분봉·VWAP·누적 거래량·누적 매수세 SVG |
 | `screener/static/stockmenu.js` | **공통 종목 메뉴 모달** (토스로 보기 / 반전 매매에 종목추가) |
 | `screener/bollinger.py` | 볼린저 반전 전략 지표·판정 엔진 (`BollingerConfig`, `rsi`, `bollinger_bands`, `prepare`, `decide`, `evaluate`) |
@@ -41,7 +48,7 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 | `screener/static/common.css` | **테마 토큰(CSS 변수)만** — 화면 스타일은 Tailwind 로 쓴다. `.tint-*`·`.dot-*`·AG Grid 미세 규칙·`[hidden]` 가드만 남김 |
 | `screener/static/gnb.js` | **공통 GNB**(왔니 주식 브랜드 + 메뉴) + 테마 토글 |
 | `screener/static/session.js` | **공통 모달 2개** — 🔑 API 키(자격증명) / ⚙ 설정(스캔·알림·주문·자동매수) |
-| `main.py` | CLI: `scan` `watch` `poll` `web` `backtest` `explain` `demo` `bollinger` `adduser` `supply` |
+| `main.py` | CLI: `scan` `watch` `poll` `web` `backtest` `explain` `demo` `bollinger` `adduser` `supply` `friday` `friday-bt` `friday-report` |
 | `poc.py` | API 없이 도는 최소 동작 예시 |
 | `tests/` | pytest 단위 테스트 (외부 API 불필요) |
 
@@ -569,6 +576,45 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 - 틱 규칙 매수세는 추정치라 HTS 체결강도와 다르다.
 - 스캔 간격(60초) 사이의 급변은 놓친다.
 
+## 금요일 마감 돌파 (screener/friday.py · friday_backtest.py)
+화면 `/friday`, CLI `python main.py friday | friday-bt | friday-report`. 기획서 `docs/금요일마감매매_기획.md`.
+**주문을 내지 않는 관찰 전용**이다. 출처는 유튜브 '수익탐정사무소'(데빈 베이커 인터뷰 요약) — 근거 수치 없는 일화이고 미국장 맥락이라 가설로만 취급한다.
+
+### 한국장 조정
+- 마감 30분 전 = 15:00. 15:20~15:30 은 종가 단일가라 돌파 추격 불가 → 기록 창은 `window_start` 14:30 ~ `window_end` **15:15**,
+  15:15 이후 봉은 판정에서 자른다(`evaluate`). `early_cut` 15:00 이전/이후 포착을 따로 집계해 영상 기준과 비교한다.
+- '금요일' = 주말을 넘기는 날. **휴장 캘린더가 없어** 금요일이 휴장인 주는 `--friday-extra-days 2026-10-01` 로 직전 영업일을 직접 넣는다.
+
+### P0 일봉 대리 백테스트 (2026-10-11, 3년 · 2,603종목) — 판정 **조건부**
+- 신호: 직전 4일 변동폭 ≤12%·거래량 ≤20일평균, 당일 거래량 ≥2배, 종가가 고가 2% 이내 + 직전 4일 고가 돌파. 수익 = 신호일 종가 → **다음 영업일 시가**.
+- 주말 신호 984건 평균 갭 **+0.63%**, 주중 신호 +0.33%, 신호 없는 주말 +0.09%. 주말−주중 +0.29%p(Welch t 3.51), 주말−기본 +0.54%p(t 7.05).
+- **왕복 비용 0.75%(수수료 0.15%+슬리피지 0.3%×2) 에서는 평균 순수익 −0.12%.** 손익분기 비용 0.63%. 비용 0.3% 에서 날짜t 1.94, 0.5% 에서 우위 소멸.
+- 연도별 평균 갭 0.92%(2023) → 0.53 → 0.45 → 0.43%(2026) **해마다 감소**. 낙관 편향: 종가 진입 가정, 동시호가 마감 종목 혼입.
+- 판정 규칙(`PASS_RULE`): 평균 순수익>0 · 날짜t≥2 · 주중 대비 Welch t≥1.65 · 연도 2/3 이상 양(+) 모두 충족해야 '통과'.
+  총수익 우위만 있고 순손실이면 '조건부'. 수치의 단일 출처는 `evidence.FRIDAY_PROXY` (`/api/friday/evidence`) — HTML 에 하드코딩 금지.
+- 같은 날짜 신호는 시장 움직임을 공유 → 종목 t 가 아니라 **날짜별 평균의 t** 로 판정한다. `friday-bt` 는 일봉 캐시(`cache/candles/*_880.json`)만 읽는 오프라인 명령이다.
+
+### 판정 (`evaluate`)
+- **후보** = 창 거래량이 과거 5영업일 같은 구간 평균의 ≥2배 AND 현재가 > 창 이전 당일 고점(돌파선).
+  과거 분봉이 2일 미만이면 **근사하지 않고 제외**한다(supply 와 달리 일평균 근사를 쓰지 않음).
+- **진입** = 후보 AND 조용한 한 주 AND VWAP 위 AND 매수 우위(≥55%) AND 고점 부근(≥고가 99%) AND 과열 아님(당일 <+20%)
+  AND 지수 국면 우호(KOSPI/KOSDAQ 종가>MA20, 지수 조회 실패는 '미확인'으로 통과) AND 점수 ≥70. 점수·컷오프는 **경험칙(미검증)**.
+- 과거 '평소' 거래량은 `minute_profile(sym, day, 375)` (09:00+375분=15:15 에서 끝나는 최근 200개 봉)을 쓴다.
+  토스 1분봉 한 페이지가 200개라 창(45분) 구간만 안전하게 덮는다 — 09:00 부터의 누적은 못 구한다.
+- 후보 풀은 `turnover_leaders` 거래대금 상위 100 + ETF·우선주·거래정지 제외. 조용하다가 터진 종목이 대금 상위 밖이면 놓친다(한계).
+
+### P1 기록 · P3 결과 (`FridayRecorder`)
+- 신호 `out/friday_signals.jsonl`: 창 안(기록 대상 요일)에서 종목당 **첫 후보(kind=candidate)·첫 진입(kind=entry)** 한 줄씩. 가격 = 그 시각 현재가(가정 체결가).
+  재시작해도 중복되지 않는다(파일을 읽어 `_seen` 복원). 로그인 세션은 `out/users/<아이디>/friday_signals.jsonl`.
+- 결과 `out/friday_outcomes.json`: 다음 영업일 시가·09:30(`loader.price_at`)·종가·고저. **다음 영업일 15:40 이후**에만 채우고(미마감 방지) 한 번 채우면 다시 받지 않는다.
+  서비스가 30분마다 `maybe_fill`, CLI `friday-report` 가 수동으로 채운다.
+- 리포트(`build_report`, `GET /api/friday/report`): 후보 전체/진입/15:00 이전·이후, 주차별, 개별 기록. 수익은 기록가 기준, 순갭 = 갭 − 0.75%.
+  **표본 100건 전에는 실주문을 검토하지 않는다**(`ready_for_review`).
+- `FridayService`: 기록 창(대상 요일 14:25~15:20)엔 `--supply-interval` 초(60), 그 밖엔 30분. 세션마다 1개(수급과 동일), API `GET /api/friday/{state,chart/{symbol},report,evidence}` · `POST /api/friday/scan`.
+
+### 실주문은 아직 없다
+P4(실주문)는 범위 밖이다. 하더라도 기존 3중 게이트·정규장 한정·보수적 크기를 유지하고, 월요일 시초 갭하락은 손절선이 아니라 시초가에서 잃는다는 점을 전제로 한다.
+
 ## 세력추정매매 자동 매수 (screener/autobuy.py)
 - ⚙설정 → 주문 칸의 **"세력추정매매 시그널 자동 매수"** 체크 + `[점수] 이상` + `[금액]원`.
   `SessionSettings.auto_buy / auto_buy_score(기본 75) / auto_buy_amount` 로 계정 DB 에 저장된다.
@@ -610,6 +656,8 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 - 주석·출력 문구는 한국어로 통일한다.
 
 ## 변경 이력
+- 2026-10-12: **금요일 마감 돌파 추가 (P0~P3)** — `friday_backtest.py`(일봉 대리 백테스트, 판정 '조건부'), `friday.py`(스캐너·서비스·포워드 기록·결과 채우기·리포트), `/friday` 화면(3탭)·`/api/friday/*`·GNB 4번째 메뉴, CLI `friday`/`friday-bt`/`friday-report`, `--friday-extra-days`, 로더 `price_at`, `evidence.FRIDAY_PROXY`. 주문 없음. 테스트 280개 통과.
+- 2026-10-06: **그리드 행 상세를 offcanvas 로** — `static/offcanvas.js` 신설(세 화면 공통). 각 화면의 `#detail` 을 오른쪽 슬라이드 패널로 감싼다(비우거나 `hidden` 이면 닫힘, ×·배경·ESC 로 닫고 다음 행 클릭 전엔 폴링 재렌더로 다시 안 열림). 화면 코드는 기존대로 `#detail` 에 렌더하면 된다.
 - 2026-10-01: **수급포착매매 텔레그램 알림 제거** (`SupplyService.notify`·`_alert`, main/sessions 배선, 화면 문구). 테스트 245개 통과.
 - 2026-09-26: **세력추정매매 이메일 알림 추가** — `EmailNotifier`(Gmail SMTP, Bcc, HTML+토스 링크),
   `SessionSettings.alert_emails`(여러 주소), 설정 창 이메일 섹션·테스트 전송(`POST /api/session/email/test`).
