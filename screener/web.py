@@ -32,9 +32,6 @@ from fastapi.staticfiles import StaticFiles
 
 from .bollinger import BollingerConfig
 from .bollinger_bot import BollingerBot
-from .evidence import FRIDAY_PROXY
-from .friday import FridayConfig, FridayService, FridayState
-from .supply import SupplyConfig, SupplyService, SupplyState
 from .config import StrategyConfig
 from .data_loader import DataLoader
 from .notifier import EmailError, Notifier, TelegramError, TelegramNotifier, parse_emails
@@ -79,8 +76,6 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
                trading: TradingService | None = None,
                sessions: SessionManager | None = None,
                bollinger: BollingerBot | None = None,
-               supply: SupplyService | None = None,
-               friday: FridayService | None = None,
                store: Store | None = None,
                signup: bool = False, signup_code: str = "") -> FastAPI:
     cfg = cfg or StrategyConfig.tuned()
@@ -92,18 +87,10 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
     async def lifespan(_app: FastAPI):
         if service:
             service.start()
-        if supply:
-            supply.start()
-        if friday:
-            friday.start()
         log.info("대시보드 준비 완료 (스캔 주기 %ds)", interval)
         yield
         if service:
             service.stop()
-        if supply:
-            supply.stop()
-        if friday:
-            friday.stop()
         if bollinger:
             bollinger.stop()
         if sessions:
@@ -114,8 +101,6 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
     app.state.trading = trading
     app.state.sessions = sessions
     app.state.bollinger = bollinger
-    app.state.supply = supply
-    app.state.friday = friday
     app.state.store = store
     # 로그인 사용자 → 살아 있는 토스 세션 sid. 서버 재시작·쿠키 분실 후에도
     # 저장된 설정으로 세션을 되살리기 위한 지도다.
@@ -419,38 +404,6 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
                                 detail="API 키가 설정되지 않았습니다. 상단 '설정'에서 키를 입력하세요.")
         return bot
 
-    def _supply(request: Request) -> SupplyService | None:
-        """이 요청이 볼 수급 포착 스캐너. 세션 > 서버 기본 순 (스캐너와 같은 규칙)."""
-        sess = _session(request)
-        return sess.supply if sess is not None else supply
-
-    def _supply_or_503(request: Request) -> SupplyService:
-        svc = _supply(request)
-        if svc is None:
-            raise HTTPException(status_code=503,
-                                detail="API 키가 설정되지 않았습니다. 상단 '설정'에서 키를 입력하세요.")
-        return svc
-
-    def _friday(request: Request) -> FridayService | None:
-        """이 요청이 볼 금요일 마감 스캐너. 세션 > 서버 기본 순 (수급 포착과 같은 규칙)."""
-        sess = _session(request)
-        return sess.friday if sess is not None else friday
-
-    def _friday_or_503(request: Request) -> FridayService:
-        svc = _friday(request)
-        if svc is None:
-            raise HTTPException(status_code=503,
-                                detail="API 키가 설정되지 않았습니다. 상단 '설정'에서 키를 입력하세요.")
-        return svc
-
-    @app.get("/friday", include_in_schema=False)
-    def friday_page() -> FileResponse:
-        return FileResponse(STATIC_DIR / "friday.html")
-
-    @app.get("/supply", include_in_schema=False)
-    def supply_page() -> FileResponse:
-        return FileResponse(STATIC_DIR / "supply.html")
-
     @app.get("/", include_in_schema=False)
     def index() -> FileResponse:
         return FileResponse(STATIC_DIR / "dashboard.html")
@@ -686,104 +639,6 @@ def create_app(loader: DataLoader | None = None, cfg: StrategyConfig | None = No
                 for idx, r in tail.iterrows()
             ],
         })
-
-    # --------------------------------------------------- 수급 포착 매매
-    @app.get("/api/supply/state")
-    def supply_state(request: Request) -> JSONResponse:
-        svc = _supply(request)
-        if svc is None:
-            return JSONResponse({**SupplyState().as_dict(), "configured": False,
-                                 "config": SupplyConfig().describe(), "server_time": _now()})
-        # 장 밖에서는 스레드가 30분에 한 번만 돈다. 화면을 열었는데 결과가 없으면 바로 한 번 돌린다.
-        if svc.state.finished_at is None and not svc.state.running:
-            threading.Thread(target=svc.scan_once, daemon=True).start()
-        sess = _session(request)
-        return JSONResponse({
-            **svc.state.as_dict(),
-            "configured": True,
-            "source": "session" if sess is not None else "server",
-            "interval": svc.interval,
-            "idle_interval": svc.idle_interval,
-            "config": svc.cfg.describe(),
-            "server_time": _now(),
-        })
-
-    @app.post("/api/supply/scan")
-    def supply_scan(request: Request) -> JSONResponse:
-        svc = _supply_or_503(request)
-        if svc.state.running:
-            return JSONResponse({"ok": False, "message": "이미 스캔 중입니다"}, status_code=409)
-        threading.Thread(target=svc.scan_once, daemon=True).start()
-        return JSONResponse({"ok": True, "message": "스캔을 시작했습니다"})
-
-    @app.get("/api/supply/chart/{symbol}")
-    def supply_chart(request: Request, symbol: str) -> JSONResponse:
-        """당일 1분봉 + VWAP + 5분봉 이평 + 누적 매수세 + 평소 누적 거래량."""
-        if not re.fullmatch(r"[A-Za-z0-9]{6}", symbol):
-            raise HTTPException(status_code=400, detail="종목코드 형식이 아닙니다.")
-        svc = _supply_or_503(request)
-        try:
-            data = svc.scanner.chart(symbol)
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        if not data.get("bars"):
-            raise HTTPException(status_code=404, detail="당일 분봉 데이터가 없습니다.")
-        return JSONResponse({"symbol": symbol, **data})
-
-    # --------------------------------------------------- 금요일 마감 돌파 매매
-    @app.get("/api/friday/state")
-    def friday_state(request: Request) -> JSONResponse:
-        svc = _friday(request)
-        if svc is None:
-            return JSONResponse({**FridayState().as_dict(), "configured": False,
-                                 "config": FridayConfig().describe(), "server_time": _now()})
-        if svc.state.finished_at is None and not svc.state.running:
-            threading.Thread(target=svc.scan_once, daemon=True).start()
-        sess = _session(request)
-        return JSONResponse({
-            **svc.state.as_dict(),
-            "configured": True,
-            "source": "session" if sess is not None else "server",
-            "interval": svc.interval,
-            "idle_interval": svc.idle_interval,
-            "config": svc.cfg.describe(),
-            "server_time": _now(),
-        })
-
-    @app.post("/api/friday/scan")
-    def friday_scan(request: Request) -> JSONResponse:
-        svc = _friday_or_503(request)
-        if svc.state.running:
-            return JSONResponse({"ok": False, "message": "이미 스캔 중입니다"}, status_code=409)
-        threading.Thread(target=svc.scan_once, daemon=True).start()
-        return JSONResponse({"ok": True, "message": "스캔을 시작했습니다"})
-
-    @app.get("/api/friday/evidence")
-    def friday_evidence() -> JSONResponse:
-        """P0 일봉 대리 백테스트 실측 수치 (evidence.py 단일 출처)."""
-        return JSONResponse({"proxy": FRIDAY_PROXY})
-
-    @app.get("/api/friday/chart/{symbol}")
-    def friday_chart(request: Request, symbol: str) -> JSONResponse:
-        """당일 1분봉 + VWAP + 누적 매수세 + 창 이전 고점(돌파선)."""
-        if not re.fullmatch(r"[A-Za-z0-9]{6}", symbol):
-            raise HTTPException(status_code=400, detail="종목코드 형식이 아닙니다.")
-        svc = _friday_or_503(request)
-        try:
-            data = svc.scanner.chart(symbol)
-        except Exception as exc:
-            raise HTTPException(status_code=502, detail=str(exc)) from exc
-        if not data.get("bars"):
-            raise HTTPException(status_code=404, detail="당일 분봉 데이터가 없습니다.")
-        return JSONResponse({"symbol": symbol, **data})
-
-    @app.get("/api/friday/report")
-    def friday_report(request: Request) -> JSONResponse:
-        """포워드 기록 주간 리포트 — 월요일 시가·09:30·종가 결과가 채워진 신호의 성과."""
-        svc = _friday_or_503(request)
-        if svc.recorder is None:
-            return JSONResponse({"enabled": False})
-        return JSONResponse({"enabled": True, **svc.recorder.report()})
 
     # --------------------------------------------------- 볼린저 반전 매매
     @app.get("/api/bollinger/state")

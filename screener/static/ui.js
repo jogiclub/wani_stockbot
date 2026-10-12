@@ -1,64 +1,28 @@
-/* 공통 UI 기반 — Tailwind 설정 + AG Grid 헬퍼. 모든 화면이 가장 먼저 읽는다.
+/* 공통 UI 기반 — Bootstrap 5.3 클래스 묶음 + AG Grid 헬퍼. 모든 화면이 읽는다.
 
    읽는 순서 (페이지 <head>)
-     1) https://cdn.tailwindcss.com          Tailwind Play CDN
-     2) /static/ui.js                        (이 파일) tailwind.config + UI + Grid
-     3) ag-grid-community.min.js             AG Grid (CDN)
-     4) /static/common.css                   테마 토큰(CSS 변수)만 들어 있다
-
-   색은 전부 CSS 변수(`common.css`)를 가리킨다 — 라이트/다크 전환이 클래스 교체 없이 된다.
-   그래서 Tailwind 의 `dark:` 변형은 쓰지 않는다. `bg-s1 text-txt` 처럼 쓰면 테마를 따라간다.
-   ⚠ CSS 변수 색이라 `bg-s1/50` 같은 **투명도 수식은 쓸 수 없다**. 필요하면 `bg-[var(--...)]`
-   또는 `.tint-*` 유틸(common.css)을 쓴다. */
+     1) bootstrap.min.css (CDN) · pretendard (CDN)
+     2) /static/common.css           테마 토큰(CSS 변수) → Bootstrap 변수 매핑 + 보조 클래스
+     3) /static/gnb.js               <html data-bs-theme> 를 가장 먼저 정한다 (깜빡임 방지)
+     4) ag-grid-community.min.js (CDN)
+     5) /static/ui.js                (이 파일)
+   <body> 끝: bootstrap.bundle.min.js (모달·오프캔버스·툴팁 JS) */
 (function () {
-  if (window.tailwind) {
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            s0: "var(--surface-0)", s1: "var(--surface-1)", s2: "var(--surface-2)",
-            line: "var(--border)",
-            txt: "var(--text-primary)", txt2: "var(--text-secondary)", txt3: "var(--text-muted)",
-            up: "var(--up)", down: "var(--down)",
-            good: "var(--good)", warn: "var(--warning)", bad: "var(--critical)",
-            accent: "var(--accent)",
-          },
-          fontFamily: {
-            sans: ['-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Apple SD Gothic Neo',
-                   'Malgun Gothic', 'Noto Sans KR', 'sans-serif'],
-          },
-          maxWidth: { page: "1280px" },
-        },
-      },
-    };
-  }
-
-  /* 화면·모듈이 함께 쓰는 클래스 묶음. 같은 모양을 여러 파일에 베껴 쓰지 않기 위한 것이다. */
+  /* 화면·모듈이 함께 쓰는 Bootstrap 클래스 묶음. 같은 모양을 여러 파일에 베껴 쓰지 않기 위한 것이다. */
   const cls = {
-    btn: "font-sans text-sm rounded-lg border border-line bg-s1 text-txt px-3.5 py-1.5 " +
-         "hover:bg-s2 disabled:opacity-50 disabled:cursor-not-allowed",
-    btnPrimary: "font-sans text-sm rounded-lg border border-transparent bg-accent text-white " +
-                "font-semibold px-3.5 py-1.5 hover:brightness-110 " +
-                "disabled:opacity-50 disabled:cursor-not-allowed",
-    btnDanger: "font-sans text-sm rounded-lg border border-transparent bg-bad text-white " +
-               "font-semibold px-3.5 py-1.5 hover:brightness-110 " +
-               "disabled:opacity-50 disabled:cursor-not-allowed",
-    btnGhost: "font-sans text-xs rounded-lg border border-transparent bg-transparent text-txt2 " +
-              "px-2 py-1 hover:border-line",
-    card: "bg-s1 border border-line rounded-xl",
-    input: "font-sans text-sm w-full px-2.5 py-2 rounded-lg border border-line bg-s0 text-txt " +
-           "tabular-nums",
-    label: "block text-xs text-txt2 mb-1",
-    hint: "text-[11.5px] text-txt3 mt-1",
-    legend: "text-xs text-txt3 px-1.5",
-    fieldset: "border border-line rounded-[10px] px-3.5 py-3 mb-3",
-    modalBack: "fixed inset-0 z-[60] bg-black/45 flex items-start justify-center " +
-               "px-4 py-10 overflow-y-auto",
-    modal: "bg-s1 border border-line rounded-2xl w-[min(560px,100%)] px-5 pt-5 pb-4 " +
-           "shadow-[0_18px_50px_rgba(0,0,0,.3)]",
-    tile: "bg-s1 border border-line rounded-xl px-4 py-3.5",
-    tileLabel: "text-xs text-txt3 mb-1",
-    tileValue: "text-[26px] font-semibold tracking-tight tabular-nums",
+    btn: "btn btn-sm btn-outline-secondary",
+    btnPrimary: "btn btn-sm btn-primary fw-semibold",
+    btnDanger: "btn btn-sm btn-danger fw-semibold",
+    btnGhost: "btn btn-sm btn-link text-body-secondary text-decoration-none",
+    card: "card",
+    input: "form-control form-control-sm tnum",
+    label: "form-label small text-body-secondary mb-1",
+    hint: "form-text",
+    legend: "small text-body-tertiary px-1 float-none w-auto fs-6",
+    fieldset: "border rounded-3 px-3 py-2 mb-3",
+    tile: "card card-body px-3 py-3",
+    tileLabel: "small text-body-tertiary mb-1",
+    tileValue: "fs-4 fw-semibold tnum",
   };
 
   /* ------------------------------------------------------------------ AG Grid */
@@ -98,7 +62,7 @@
       headerHeight: 38,
       suppressCellFocus: true,
       defaultColDef: { sortable: true, resizable: true, suppressMovable: true,
-                       cellClass: "tabular-nums" },
+                       cellClass: "tnum" },
       onRowClicked: onRow ? (ev) => onRow(ev.data, ev.event) : undefined,
       ...options,
     });
@@ -113,8 +77,8 @@
     : `${v > 0 ? "+" : ""}${Number(v).toFixed(d)}%`);
 
   /** 증감 값 칸에 색을 입힌다 (상승=적색, 하락=청색 — 한국 시장 관례). */
-  const upDown = (v) => (v > 0 ? "text-up font-semibold"
-    : v < 0 ? "text-down font-semibold" : "text-txt3");
+  const upDown = (v) => (v > 0 ? "text-up fw-semibold"
+    : v < 0 ? "text-down fw-semibold" : "text-body-tertiary");
 
   window.UI = { cls, num, pct, signed, upDown };
   window.Grid = { create, LOCALE };

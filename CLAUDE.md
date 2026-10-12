@@ -3,19 +3,13 @@
 > 이 문서는 프로젝트 지침서다. **새로 확인된 사실·결정·API 스펙은 여기에 계속 누적 기록한다.**
 
 ## 프로젝트 목표
-네 전략을 한 대시보드에서 돌린다. 상단 GNB 로 화면을 오간다 (브랜드: **왔니 주식**).
-GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반전 매매 → 금요일 마감 돌파**.
+두 전략을 한 대시보드에서 돌린다. 상단 GNB 로 화면을 오간다 (브랜드: **왔니 주식**).
+GNB 순서: **세력추정매매 → 볼린저 밴드 반전 매매**.
 
-0. **수급포착매매** (`/supply`) — 장 초반 거래량 급증 + 수급 연속성으로 주도주를 포착하는
-   관찰용 스크리너. 주문 없음, **백테스트 미검증** (아래 "수급 포착 매매" 절).
 1. **세력추정매매** (`/`) — 바닥권에서 대량 거래량을 동반한 윗꼬리 캔들(기준봉/매집봉) 발생 →
    매물 소화(조정) → **전일 고가**를 거래량과 함께 돌파하는 순간을 포착해 KOSPI/KOSDAQ 을 스크리닝.
 2. **볼린저 밴드 반전 매매** (`/bollinger`) — 박스권에서 밴드 하한 + RSI 과매도에 사고
    상한 + 과매수에 파는 평균 회귀 전략. **토스 OpenAPI 로 실제 시장가 매수·매도까지 자동 실행**한다.
-
-3. **금요일 마감 돌파** (`/friday`) — 주말 직전 영업일 14:30~15:15 에 거래량 급증 + 당일 고점 돌파 종목을
-   포착하는 **관찰 전용**(주문 없음) 스크리너. P0 일봉 대리 백테스트 **'조건부'**, 분봉 성과는 포워드 기록 중
-   (아래 "금요일 마감 돌파" 절).
 
 ## 모듈 구조
 | 파일 | 역할 |
@@ -31,11 +25,6 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 | `screener/regime.py` | 시장 국면 판정 (`MarketRegime`) — 지수 vs 이동평균 |
 | `screener/scoring.py` | 진입 점수 100점 산정 (`score_signal`) — 배점은 백테스트 실측 기반 |
 | `screener/backtest.py` | 백테스트 엔진. `Backtester`(시그널 재현 + 청산 시뮬), `ExitPolicy`, `Trade`, `BacktestResult` |
-| `screener/supply.py` | 수급 포착 매매 (`SupplyConfig`·`evaluate`·`SupplyScanner`·`SupplyService`) |
-| `screener/friday.py` | 금요일 마감 돌파 (`FridayConfig`·`evaluate`·`FridayScanner`·`FridayService`·`FridayRecorder`·`build_report`) |
-| `screener/friday_backtest.py` | 금요일 마감 돌파 P0 일봉 대리 백테스트 (`ProxyParams`·`proxy_frame`·`analyze`·`run_proxy_from_cache`) |
-| `screener/static/friday.html` | 금요일 마감 돌파 화면 (`/friday`). 포착 종목·포워드 기록·가이드 근거 3탭 |
-| `screener/static/supply.html` | 수급포착매매 화면 (`/supply`). 당일 1분봉·VWAP·누적 거래량·누적 매수세 SVG |
 | `screener/static/stockmenu.js` | **공통 종목 메뉴 모달** (토스로 보기 / 반전 매매에 종목추가) |
 | `screener/bollinger.py` | 볼린저 반전 전략 지표·판정 엔진 (`BollingerConfig`, `rsi`, `bollinger_bands`, `prepare`, `decide`, `evaluate`) |
 | `screener/bollinger_bot.py` | 볼린저 자동매매 루프 (`BollingerBot`) — 잔고 동기화 → 판정 → 시장가 주문 |
@@ -44,11 +33,11 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 | `screener/sessions.py` | 접속자별 토스 API 키 세션 (`SessionManager`·`UserSession`·`SessionSettings`) |
 | `screener/static/dashboard.html` | 세력추정매매 화면 (`/`). vanilla JS + 인라인 SVG 캔들/거래량 차트 |
 | `screener/static/bollinger.html` | 볼린저 반전 매매 화면 (`/bollinger`). 밴드+RSI 인라인 SVG 차트 |
-| `screener/static/ui.js` | **공통 UI 기반** — Tailwind 설정(색 토큰 매핑) + `UI.cls`(버튼·폼·카드 클래스 묶음) + `Grid.create()`(AG Grid 헬퍼) |
-| `screener/static/common.css` | **테마 토큰(CSS 변수)만** — 화면 스타일은 Tailwind 로 쓴다. `.tint-*`·`.dot-*`·AG Grid 미세 규칙·`[hidden]` 가드만 남김 |
+| `screener/static/ui.js` | **공통 UI 기반** — `UI.cls`(Bootstrap 클래스 묶음: 버튼·폼·카드) + `UI.num/pct/signed/upDown` + `Grid.create()`(AG Grid 헬퍼) |
+| `screener/static/common.css` | **테마 토큰(CSS 변수) → Bootstrap 변수 매핑** + `.text-up/.tint-*/.dot-*` 같은 앱 보조 클래스·AG Grid 미세 규칙·`[hidden]` 가드. Pretendard 폰트 지정 |
 | `screener/static/gnb.js` | **공통 GNB**(왔니 주식 브랜드 + 메뉴) + 테마 토글 |
 | `screener/static/session.js` | **공통 모달 2개** — 🔑 API 키(자격증명) / ⚙ 설정(스캔·알림·주문·자동매수) |
-| `main.py` | CLI: `scan` `watch` `poll` `web` `backtest` `explain` `demo` `bollinger` `adduser` `supply` `friday` `friday-bt` `friday-report` |
+| `main.py` | CLI: `scan` `watch` `poll` `web` `backtest` `explain` `demo` `bollinger` `adduser` |
 | `poc.py` | API 없이 도는 최소 동작 예시 |
 | `tests/` | pytest 단위 테스트 (외부 API 불필요) |
 
@@ -278,7 +267,7 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
 - **관리자 / 일반 사용자 구분** (`users.is_admin`, 예전 DB 는 시작 시 열 자동 추가).
   서버 `.env` 계좌를 쓰는 **주문(`/api/trading/*`)·서버 볼린저 봇은 관리자만** 쓴다
   (`_server_trading`/`_server_bot`). 일반 사용자는 자기 토스 키 세션으로만 주문·봇을 쓴다.
-  시세 화면(세력추정 스캔·수급)은 서버 키로 모든 로그인 사용자가 공유한다.
+  시세 화면(세력추정 스캔)은 서버 키로 모든 로그인 사용자가 공유한다.
   관리자 지정: `APP_ADMIN_USER` 계정이 자동 관리자(관리자가 하나도 없으면 승격),
   또는 `python main.py adduser <아이디> --admin`. 마지막 관리자는 탈퇴할 수 없다.
 - **세션-계정 결속**: `UserSession.owner` = 로그인 아이디. `_session()` 은 쿠키의 세션이라도
@@ -333,37 +322,40 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
   1건 실제 발송, 실패 시 `EmailError` 한국어 안내(401=앱 비밀번호 확인 등)를 400 으로. 응답에 수신자 전체를 담지 않는다.
 - 메일은 HTML(종목·점수·매수/손절/가격 표) + 토스 링크. 종목명은 `html.escape`.
 
-## 공통 GNB · 정적 파일 (2026-09-18 Tailwind + AG Grid 전환)
-- `<head>` 스크립트 순서(모든 화면 동일): **tailwind CDN → `/static/ui.js` → ag-grid CDN → `/static/common.css`
-  → gnb.js → session.js → (dashboard·supply 만) stockmenu.js.** ui.js 가 tailwind.config 를 세팅하므로
-  tailwind 다음에 와야 한다.
-- **색은 CSS 변수를 가리키는 Tailwind 토큰**(`bg-s0/s1/s2`, `border-line`, `text-txt/txt2/txt3`,
-  `text-up/down/good/warn/bad/accent`)이라 라이트/다크가 클래스 교체 없이 따라온다. 그래서 `dark:` 변형은
-  쓰지 않는다. **CSS 변수 색이라 투명도 수식(`bg-good/12`)은 못 쓴다** — 옅은 배경은 `.tint-*` 유틸.
-- 목록은 `Grid.create(el, {columns, rows, onRow, options})` 로 만든다. 컨테이너에 높이를 주고
-  (`h-[min(60vh,560px)]`), 폴링 갱신은 `setGridOption("rowData", …)`, 탭 전환으로 목록이 사라지면
-  `destroy()` (매 주기 새로 만들지 말 것). 선택 행 강조는 `rowClassRules`+`redrawRows()`.
-  종목코드·종목명 셀은 `StockMenu.link` cellRenderer, 행 클릭은 `StockMenu.fromEvent` 가 true 면 상세 열기를 건너뛴다.
-  헤더 설명은 `headerTooltip`. **cellRenderer 가 참조하는 헬퍼 함수는 반드시 `<script>` 스코프에 정의**할 것
-  (전환 중 `scoreCell`·`scoreBar`·`gradeBadge` 가 유실돼 그리드가 빈 셀로 나온 적 있다 — 회귀 주의).
-- 세 화면은 `/static/common.css`(테마 토큰) + `/static/ui.js`(Tailwind·그리드) + `/static/gnb.js`(GNB·테마 토글)
-  + `/static/session.js`(API 키·설정 모달) + `/static/stockmenu.js`(종목 메뉴) 를 공유한다. `web.py` 가 `/static` 을 mount 한다.
-- 테마 토글과 ⚙설정 버튼은 **GNB 로 옮겼다.** 페이지는 `<div data-gnb="supply|screener|bollinger">` 자리표시자와
-  `[data-gnb-action]` 버튼만 두면 `gnb.js` 가 GNB 를 그리고 버튼을 오른쪽으로 옮긴다.
-- 테마가 바뀌면 `themechange` 이벤트가 뜬다 — 인라인 SVG 차트는 이걸 듣고 다시 그린다.
-- 설정 저장·해제 후에는 `sessionchange` 이벤트가 뜬다.
-- **테마 토큰을 화면 HTML 에 다시 정의하지 말 것** — `common.css` 한 곳에만 둔다.
+## 공통 GNB · 정적 파일 (2026-10-06 Bootstrap 5.3 + Pretendard 전환)
+- 프런트엔드는 **Bootstrap 5.3.3(CDN) + AG Grid(CDN, 33.3.2) + Pretendard(CDN, 가변 폰트)**. Tailwind 는 쓰지 않는다
+  (2026-09-18~10-05 Tailwind 였다가 되돌림). **외부 CDN 이 필요하다** — 폐쇄망에 올리려면 자체 호스팅으로 바꿀 것.
+- `<head>` 순서(모든 화면 동일): bootstrap.min.css → pretendard css → `/static/common.css` → `/static/gnb.js`
+  (`<html data-bs-theme>` 를 페인트 전에 정한다) → ag-grid CDN → `/static/ui.js` → session.js → (offcanvas.js·stockmenu.js).
+  `<body>` 끝에 `bootstrap.bundle.min.js`(모달·오프캔버스).
+- **테마 토큰은 `common.css` 한 곳**에만 둔다(`--surface-0/1/2`, `--border`, `--text-*`, `--up/--down/--good/--warning/--critical/--accent`).
+  `[data-bs-theme=light|dark]` 로 갈리고 Bootstrap 변수(`--bs-body-bg`, `--bs-border-color` …)에 연결돼 컴포넌트가 따라온다.
+  앱 색 유틸: `text-up/down/good/warn/bad/accent`, `bg-s0/s1/s2`, `border-line`, `tint-*`(옅은 배경), `tnum`.
+  **Bootstrap 기본 `text-success/danger` 는 쓰지 말 것**(한국 시장 관례: 상승=적색).
+- 테마: 저장값(localStorage `theme`) → `?theme=dark|light` 딥링크 → 시스템 설정. 토글은 라이트/다크/시스템 순환,
+  바뀌면 `themechange` 이벤트 — 인라인 SVG 차트는 이걸 듣고 다시 그린다.
+- 목록은 `Grid.create(el, {columns, rows, onRow, options})` 로 만든다. 컨테이너에 높이를 주고, 폴링 갱신은
+  `setGridOption("rowData", …)`, 탭 전환으로 목록이 사라지면 `destroy()` (매 주기 새로 만들지 말 것).
+  선택 행 강조는 `rowClassRules`+`redrawRows()`. 종목코드·종목명 셀은 `StockMenu.link` cellRenderer, 행 클릭은
+  `StockMenu.fromEvent` 가 true 면 상세 열기를 건너뛴다. 헤더 설명은 `headerTooltip`.
+  **cellRenderer 가 참조하는 헬퍼 함수는 반드시 `<script>` 스코프에 정의**할 것(유실로 그리드가 빈 셀이 된 적 있다).
+- 두 화면은 common.css + ui.js + gnb.js(GNB·테마 토글) + session.js(API 키·설정 모달) 를 공유하고,
+  세력추정은 stockmenu.js(종목 메뉴)도 쓴다. `web.py` 가 `/static` 을 mount 한다.
+- 페이지는 `<div data-gnb="screener|bollinger">` 자리표시자와 `[data-gnb-action]` 버튼만 두면 gnb.js 가 GNB 를 그리고
+  버튼을 오른쪽으로 옮긴다. 설정 저장·해제 후에는 `sessionchange` 이벤트가 뜬다.
+- **모달은 Bootstrap Modal**(`bootstrap.Modal.getOrCreateInstance(el).show()`), **상세 패널은 Bootstrap Offcanvas**
+  (`static/offcanvas.js`): `#detail` 에 렌더하면 되고(비우거나 `hidden` 이면 닫힘), `data-oc="bottom"` 이면 아래에서,
+  아니면 오른쪽에서 열린다. 상세 안의 `[data-oc-head]` 요소는 offcanvas 헤더로 복제돼 올라간다.
+  닫으면 다음 그리드 행 클릭 전까지 폴링 재렌더로 다시 열리지 않는다.
 
 ## 웹 대시보드
 - `python main.py web --port 8083` / 컨테이너는 compose `web` 서비스 (8083:8083).
 - `ScanService` 가 `interval` 초마다 스캔해 결과를 메모리에 보관하고, 브라우저는 `/api/state` 를 5초마다 폴링한다.
   `scan_once()` 는 논블로킹 락으로 중복 실행을 막는다(진행 중이면 현재 상태 반환, `POST /api/scan` 은 409).
-- 프런트엔드는 **Tailwind CSS(Play CDN) + AG Grid(CDN, 33.3.2)** 를 쓴다 (2026-09-18 도입).
-  종목 목록은 전부 AG Grid, 화면 스타일은 전부 Tailwind 유틸리티. 차트는 여전히 인라인 SVG 직접 생성.
-  **외부 CDN 이 필요하다** — 폐쇄망에 올리려면 `ui.js` 위 두 CDN 을 자체 호스팅으로 바꿔야 한다.
+- 프런트엔드 스택은 위 '공통 GNB · 정적 파일' 절 참고(Bootstrap + AG Grid + Pretendard, 차트는 인라인 SVG 직접 생성).
 - 색상: 상승/양봉 `--up`(적색), 하락/음봉 `--down`(청색) — 한국 시장 관례. 라이트/다크 각각
   `#e34948/#2a78d6`, `#e66767/#3987e5` 로 CVD·대비 검증 통과(all-pairs). 기준봉은 `--warning` 띠로 강조.
-- 라이트/다크 모두 지원: `:root` 기본 + `prefers-color-scheme` + `[data-theme]` 토글(localStorage 저장),
+- 라이트/다크 모두 지원: `data-bs-theme` + 시스템 설정 + 토글(localStorage 저장),
   `?theme=dark|light` 딥링크(스크린샷·임베드용).
 - FastAPI 는 deprecated `on_event` 대신 `lifespan` 컨텍스트를 쓴다.
 - `create_app(loader=None, ...)` 이 허용된다 — 서버 키가 없으면 `/api/state` 가
@@ -371,8 +363,6 @@ GNB 순서: **수급포착매매 → 세력추정매매 → 볼린저 밴드 반
   시그널·차트·스캔 API 는 이때 503 이다.
 - 모든 데이터 API 는 요청 쿠키로 세션을 먼저 찾고(`_service(request)` / `_bot(request)`),
   없으면 서버 기본 스캐너·봇을 쓴다. 새 API 를 추가할 때 전역 `service`/`bollinger` 를 직접 참조하지 말 것.
-- 수급 API: `GET /api/supply/state` · `POST /api/supply/scan` · `GET /api/supply/chart/{symbol}`
-  (`_supply(request)` 로 세션 > 서버 순). 서버에 수급 서비스가 없으면 state 는 `configured:false`, 나머지는 503.
 - 볼린저 API: `GET /api/bollinger/state` · `POST /api/bollinger/{config,symbols,live,start,stop,run}` ·
   `DELETE /api/bollinger/symbols`(감시 목록에서 종목 1개 제거 — **보유 중이면 409 로 거부**) ·
   `GET /api/bollinger/chart/{symbol}`. 봇은 세션마다 하나씩 만들되 **자동 시작하지 않는다**
@@ -514,106 +504,9 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
   상세 패널은 열지 않는다. 행의 다른 칸을 누르면 기존대로 상세가 열린다.
   상세 패널의 "토스증권에서 열기" 버튼은 그대로 직접 링크다.
 - **볼린저 설정(감시 목록 포함)은 DB 에 저장된다** (`bollinger_configs` 테이블, 아래 로그인 절 참고).
-- 종목 메뉴는 공통 모듈 `static/stockmenu.js` 다 (세력추정·수급포착 화면 공용). 페이지는
+- 종목 메뉴는 공통 모듈 `static/stockmenu.js` 다 (세력추정 화면 사용). 페이지는
   `StockMenu.link(r, text, cls)` 로 셀을 만들고 행 클릭에서 `StockMenu.fromEvent(ev, 코드, 이름)` 가
   true 면 상세 열기를 건너뛴다. 스타일(`button.stock`·`.menu-list`)은 `common.css` 에 있다.
-- 공통 모달 `.modal-back` 은 `z-index: 60` 이다. GNB 가 `50`(sticky)이라 그보다 낮으면
-  모달 윗부분이 GNB 에 가려진다 (⚙설정 모달도 같은 문제가 있었다).
-
-## 수급 포착 매매 (screener/supply.py)
-화면 `/supply`, CLI `python main.py supply`. **주문을 내지 않는 관찰용**이며 **백테스트 미검증**이다
-(점수는 경험칙 배점 — 세력추정매매처럼 실측 근거가 있는 것처럼 문구를 바꾸지 말 것).
-
-### 판정 흐름
-| 단계 | 조건 (`SupplyConfig`) |
-|---|---|
-| 후보 | `rankings MARKET_TRADING_AMOUNT duration=1d` 상위 100 → `stocks` 메타로 ETF(`securityType!=STOCK`)·우선주·거래정지 제외, 거래대금 ≥ 100억, 주가 ≥ 1,000원 |
-| 1차 급증 | `min(경과분, 60)` 시점까지 오늘 누적 거래량 ÷ **과거 5영업일 같은 분까지 누적 평균** ≥ 2.0 (못 넘으면 목록에서 제외) |
-| 관찰 | 장 시작 30분 전 (`confirm_minutes`) |
-| 이탈 | 현재가 < 손절선, 또는 (최근 30분 거래량 < 직전 30분 × 0.5 AND 매수 비중 < 45%) |
-| 지속 | 매수 비중 ≥ 55% AND 누적 매수세(CVD) 상승 AND VWAP 위 AND 손절선 위 AND 거래량 유지 |
-| 약화 | 그 밖 |
-| **진입** | (별도 플래그, status 아님) **지속 AND 갭 과열 아님 AND 고점권 아님 AND 종합 점수 ≥ `entry_score_min`(70)** |
-
-- **'진입'(`decide_entry`, 들어갈 만한 것)** — status 는 그대로 두고 **별도 플래그**로 여러 지표를 종합한다:
-  수급 지속 + 갭 과열 아님 + 고점권 아님 + 종합 점수 ≥ `entry_score_min`(기본 70).
-  화면은 🔥 배지·필터·근거로 강조한다(텔레그램 발송 없음). `entry_reasons` 에 근거를 담는다.
-  `_enrich` 에서 투자자(+5점) 반영 후 `rescore`→`decide_entry` 를 다시 불러 최종 판정한다. 정렬도 진입 우선.
-  **이 컷오프도 백테스트로 검증된 값이 아니다**(경험칙) — 재료·뉴스·공시는 사람이 확인한다.
-- 손절선 = 5분봉 20이평(`minute_ma`, **완성된 5분봉만** — label=right), 형성 전(대략 10:40 전)엔 VWAP.
-- '평소' 를 일평균 × 경과비율로 나누지 않는 이유: 장 초반에 거래가 몰려 선형 비례는 기대치를 과소평가해
-  배수가 부풀려진다. 과거 분봉이 2일 미만이면 그 근사로 대체하고 `급증기준="일평균 근사"` 로 표시한다.
-- 매수세는 **틱 규칙 추정**(`tick_flow`: 직전 종가 대비 상승=매수, 하락=매도, 보합=봉 방향).
-  토스 `/trades` 에는 매수/매도 구분이 없고 최근 50건뿐이라 쓰지 않는다.
-- 호가 잔량비(`orderbook_summary`)는 해석이 갈려 **점수에 넣지 않고 표시만** 한다.
-- 외국인·기관·프로그램 잠정 순매수(`investor_flow`)는 포착 종목만 조회(3 TPS), 순매수면 +5점.
-- 유의종목 차단/표시는 세력추정매매와 **같은 목록**(`StrategyConfig.blocking_warnings/notice_warnings`)을 쓴다.
-- 판정·차트 모두 `session_bars`·`continuous_bars`·`tick_flow`·`vwap`·`minute_ma` 같은 함수를 쓴다.
-
-### 토스 1분봉 시각 규칙 (2026-09-16 실측)
-- **봉 시각은 봉이 끝나는 시각**이다. 09:00~09:01 거래 → `09:01` 봉. `09:00` 이하 봉은 장전(NXT).
-- 접속매매 마지막 봉은 `15:20`, **종가 동시호가 체결은 `15:30` 또는 `15:31` 봉**에 몰린다
-  (한선엔지니어링 15:30, 삼성전자 15:31 — 종목마다 다름). 그 뒤는 시간외.
-- 그래서 수급 모듈의 정규장은 `09:00 < t ≤ 15:31`, 흐름 계산은 `t ≤ 15:20`(동시호가 제외).
-- 참고: 볼린저의 `regular_session` 은 `09:00 ≤ t ≤ 15:30` 이라 장전 `09:00` 봉이 들어가고
-  `15:31` 동시호가 봉이 빠진다. 영향은 1~2봉이지만 볼린저를 손볼 때 같이 맞출 것 (아직 미수정).
-- `before` 파라미터(`2026-09-15T10:00:59+09:00`)로 과거 특정 시각까지의 분봉을 받을 수 있다.
-
-### 데이터 · 비용
-- `TossDataLoader.session_minutes` — 정규장 봉이 있는 **가장 최근 날짜**를 찾고 그날 09:00 이전까지
-  페이지를 넘긴다(최대 6쪽). 장 마감 후·장전에는 직전 거래일이 기준일이 된다.
-- `minute_profile` — 과거 영업일 09:00~10:00 분봉을 `cache/intraday/{코드}_{날짜}_{분}.json` 에 **영구 캐시**.
-  첫 스캔은 70종목 × 5일 호출로 약 40초, 이후 약 16초 (2026-09-16 실측).
-- 일봉은 세력추정 스캐너와 같은 `ohlcv(sym, 260)` 캐시를 공유한다.
-- `SupplyService` 는 **장중 `interval`(기본 60초, `--supply-interval`), 장 밖 30분**에 한 번 돈다.
-  화면을 열었는데 결과가 없으면 `/api/supply/state` 가 즉시 1회 스캔을 띄운다.
-  **수급포착은 텔레그램 알림을 보내지 않는다** (2026-10-01 제거 — `SupplyService` 에 `notify` 없음, 화면 확인 전용).
-- 세션마다 수급 스레드가 1개 더 뜬다(세션 생성 시 시작, `close()` 에서 정지).
-- JSON 으로 나가는 값은 `clean()` 으로 NaN → null 처리한다 (Starlette 는 NaN 을 거부한다).
-
-### 한계 — 문서에 반드시 남길 것
-- 승률·기대값을 모른다. 뉴스·공시 확인은 사람이 해야 한다 (API 없음).
-- 틱 규칙 매수세는 추정치라 HTS 체결강도와 다르다.
-- 스캔 간격(60초) 사이의 급변은 놓친다.
-
-## 금요일 마감 돌파 (screener/friday.py · friday_backtest.py)
-화면 `/friday`, CLI `python main.py friday | friday-bt | friday-report`. 기획서 `docs/금요일마감매매_기획.md`.
-**주문을 내지 않는 관찰 전용**이다. 출처는 유튜브 '수익탐정사무소'(데빈 베이커 인터뷰 요약) — 근거 수치 없는 일화이고 미국장 맥락이라 가설로만 취급한다.
-
-### 한국장 조정
-- 마감 30분 전 = 15:00. 15:20~15:30 은 종가 단일가라 돌파 추격 불가 → 기록 창은 `window_start` 14:30 ~ `window_end` **15:15**,
-  15:15 이후 봉은 판정에서 자른다(`evaluate`). `early_cut` 15:00 이전/이후 포착을 따로 집계해 영상 기준과 비교한다.
-- '금요일' = 주말을 넘기는 날. **휴장 캘린더가 없어** 금요일이 휴장인 주는 `--friday-extra-days 2026-10-01` 로 직전 영업일을 직접 넣는다.
-
-### P0 일봉 대리 백테스트 (2026-10-11, 3년 · 2,603종목) — 판정 **조건부**
-- 신호: 직전 4일 변동폭 ≤12%·거래량 ≤20일평균, 당일 거래량 ≥2배, 종가가 고가 2% 이내 + 직전 4일 고가 돌파. 수익 = 신호일 종가 → **다음 영업일 시가**.
-- 주말 신호 984건 평균 갭 **+0.63%**, 주중 신호 +0.33%, 신호 없는 주말 +0.09%. 주말−주중 +0.29%p(Welch t 3.51), 주말−기본 +0.54%p(t 7.05).
-- **왕복 비용 0.75%(수수료 0.15%+슬리피지 0.3%×2) 에서는 평균 순수익 −0.12%.** 손익분기 비용 0.63%. 비용 0.3% 에서 날짜t 1.94, 0.5% 에서 우위 소멸.
-- 연도별 평균 갭 0.92%(2023) → 0.53 → 0.45 → 0.43%(2026) **해마다 감소**. 낙관 편향: 종가 진입 가정, 동시호가 마감 종목 혼입.
-- 판정 규칙(`PASS_RULE`): 평균 순수익>0 · 날짜t≥2 · 주중 대비 Welch t≥1.65 · 연도 2/3 이상 양(+) 모두 충족해야 '통과'.
-  총수익 우위만 있고 순손실이면 '조건부'. 수치의 단일 출처는 `evidence.FRIDAY_PROXY` (`/api/friday/evidence`) — HTML 에 하드코딩 금지.
-- 같은 날짜 신호는 시장 움직임을 공유 → 종목 t 가 아니라 **날짜별 평균의 t** 로 판정한다. `friday-bt` 는 일봉 캐시(`cache/candles/*_880.json`)만 읽는 오프라인 명령이다.
-
-### 판정 (`evaluate`)
-- **후보** = 창 거래량이 과거 5영업일 같은 구간 평균의 ≥2배 AND 현재가 > 창 이전 당일 고점(돌파선).
-  과거 분봉이 2일 미만이면 **근사하지 않고 제외**한다(supply 와 달리 일평균 근사를 쓰지 않음).
-- **진입** = 후보 AND 조용한 한 주 AND VWAP 위 AND 매수 우위(≥55%) AND 고점 부근(≥고가 99%) AND 과열 아님(당일 <+20%)
-  AND 지수 국면 우호(KOSPI/KOSDAQ 종가>MA20, 지수 조회 실패는 '미확인'으로 통과) AND 점수 ≥70. 점수·컷오프는 **경험칙(미검증)**.
-- 과거 '평소' 거래량은 `minute_profile(sym, day, 375)` (09:00+375분=15:15 에서 끝나는 최근 200개 봉)을 쓴다.
-  토스 1분봉 한 페이지가 200개라 창(45분) 구간만 안전하게 덮는다 — 09:00 부터의 누적은 못 구한다.
-- 후보 풀은 `turnover_leaders` 거래대금 상위 100 + ETF·우선주·거래정지 제외. 조용하다가 터진 종목이 대금 상위 밖이면 놓친다(한계).
-
-### P1 기록 · P3 결과 (`FridayRecorder`)
-- 신호 `out/friday_signals.jsonl`: 창 안(기록 대상 요일)에서 종목당 **첫 후보(kind=candidate)·첫 진입(kind=entry)** 한 줄씩. 가격 = 그 시각 현재가(가정 체결가).
-  재시작해도 중복되지 않는다(파일을 읽어 `_seen` 복원). 로그인 세션은 `out/users/<아이디>/friday_signals.jsonl`.
-- 결과 `out/friday_outcomes.json`: 다음 영업일 시가·09:30(`loader.price_at`)·종가·고저. **다음 영업일 15:40 이후**에만 채우고(미마감 방지) 한 번 채우면 다시 받지 않는다.
-  서비스가 30분마다 `maybe_fill`, CLI `friday-report` 가 수동으로 채운다.
-- 리포트(`build_report`, `GET /api/friday/report`): 후보 전체/진입/15:00 이전·이후, 주차별, 개별 기록. 수익은 기록가 기준, 순갭 = 갭 − 0.75%.
-  **표본 100건 전에는 실주문을 검토하지 않는다**(`ready_for_review`).
-- `FridayService`: 기록 창(대상 요일 14:25~15:20)엔 `--supply-interval` 초(60), 그 밖엔 30분. 세션마다 1개(수급과 동일), API `GET /api/friday/{state,chart/{symbol},report,evidence}` · `POST /api/friday/scan`.
-
-### 실주문은 아직 없다
-P4(실주문)는 범위 밖이다. 하더라도 기존 3중 게이트·정규장 한정·보수적 크기를 유지하고, 월요일 시초 갭하락은 손절선이 아니라 시초가에서 잃는다는 점을 전제로 한다.
 
 ## 세력추정매매 자동 매수 (screener/autobuy.py)
 - ⚙설정 → 주문 칸의 **"세력추정매매 시그널 자동 매수"** 체크 + `[점수] 이상` + `[금액]원`.
@@ -656,7 +549,13 @@ P4(실주문)는 범위 밖이다. 하더라도 기존 3중 게이트·정규장
 - 주석·출력 문구는 한국어로 통일한다.
 
 ## 변경 이력
-- 2026-10-12: **금요일 마감 돌파 추가 (P0~P3)** — `friday_backtest.py`(일봉 대리 백테스트, 판정 '조건부'), `friday.py`(스캐너·서비스·포워드 기록·결과 채우기·리포트), `/friday` 화면(3탭)·`/api/friday/*`·GNB 4번째 메뉴, CLI `friday`/`friday-bt`/`friday-report`, `--friday-extra-days`, 로더 `price_at`, `evidence.FRIDAY_PROXY`. 주문 없음. 테스트 280개 통과.
+- 2026-10-06: **Tailwind → Bootstrap 5.3 + Pretendard 전환, 수급포착매매 완전 제거.** 화면 3개(dashboard·bollinger·login)와
+  공통 JS(gnb·session·stockmenu·offcanvas)를 Bootstrap 마크업으로 재작성, 모달=Bootstrap Modal, 상세=Bootstrap Offcanvas
+  (세력추정은 하단 시트). 테마는 `data-bs-theme`. 수급포착(`supply.py`·`/supply`·`/api/supply/*`·`main.py supply`·
+  `--supply-interval`·`TossDataLoader` 의 turnover_leaders/metas/session_minutes/minute_profile/investor_flow/orderbook_summary·
+  세션별 수급 스레드)과 `tests/test_supply.py` 삭제. 토스 클라이언트의 `candles_page`·`orderbook`·`investor_trading`·
+  `program_trades` 는 남겨 뒀다(미사용). `cache/intraday/` 는 더 쓰지 않는 캐시라 지워도 된다.
+- 2026-10-06: **offcanvas 제목줄 분리 + 세력추정도 하단 시트** — 상세 안의 `data-oc-head` 요소를 offcanvas.js 가 `#oc-head` 로 복제해 올리고(원본 숨김) ×는 그 오른쪽에 둔다. 세력추정·수급포착 `#detail` 은 `data-oc="bottom"`.
 - 2026-10-06: **그리드 행 상세를 offcanvas 로** — `static/offcanvas.js` 신설(세 화면 공통). 각 화면의 `#detail` 을 오른쪽 슬라이드 패널로 감싼다(비우거나 `hidden` 이면 닫힘, ×·배경·ESC 로 닫고 다음 행 클릭 전엔 폴링 재렌더로 다시 안 열림). 화면 코드는 기존대로 `#detail` 에 렌더하면 된다.
 - 2026-10-01: **수급포착매매 텔레그램 알림 제거** (`SupplyService.notify`·`_alert`, main/sessions 배선, 화면 문구). 테스트 245개 통과.
 - 2026-09-26: **세력추정매매 이메일 알림 추가** — `EmailNotifier`(Gmail SMTP, Bcc, HTML+토스 링크),

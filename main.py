@@ -9,9 +9,6 @@
   python main.py poll --top 100 --interval 60  # 장중 반복 감시 + 텔레그램 알림
   python main.py web --port 8083               # 웹 대시보드
   python main.py backtest --limit 300 --years 3 # 과거 성과 검증
-  python main.py friday-bt                      # 금요일 마감 돌파 일봉 대리 백테스트 (오프라인)
-  python main.py friday                         # 금요일 마감 돌파 1회 스캔 (14:30~15:15 에 기록)
-  python main.py friday-report                  # 금요일 신호 포워드 기록 리포트
   python main.py explain 005930                # 특정 종목 조건 진단
   python main.py bollinger --symbols 005930 --bb-interval 15m   # 볼린저 반전 매매 봇(모의)
 """
@@ -19,11 +16,9 @@
 from __future__ import annotations
 
 import argparse
-import json
 import logging
 import sys
 import time
-from datetime import datetime
 
 from pathlib import Path
 
@@ -119,106 +114,6 @@ def cmd_poll(args, app, cfg):
             return 0
 
 
-def build_friday_config(args):
-    """CLI 옵션 → FridayConfig (금요일이 휴장일인 주의 목요일 등을 `--friday-extra-days` 로 넣는다)."""
-    from screener.friday import FridayConfig
-
-    extra = tuple(d.strip() for d in (args.friday_extra_days or "").split(",") if d.strip())
-    return FridayConfig(extra_days=extra)
-
-
-def cmd_friday_bt(args, app, cfg):
-    """P0 — 일봉 캐시로 금요일 마감 돌파 가설을 대리 검증한다 (오프라인, API 불필요)."""
-    from screener.friday_backtest import ProxyParams, run_proxy_from_cache
-
-    bars = int(args.years * 250) + cfg.min_history
-    daily_dir = app.cache_dir / "candles"
-    if not any(daily_dir.glob(f"*_{bars}.json")):
-        # 일봉 캐시는 `backtest` 가 만든다 (종목당 years*250+min_history 봉). 가장 흔한 개수를 안내한다.
-        counts = sorted({p.stem.split("_")[-1] for p in daily_dir.glob("*_*.json")}) if daily_dir.exists() else []
-        print(f"일봉 캐시({bars}봉)가 없습니다. 먼저 `python main.py backtest --years {args.years}` 를 돌리거나 "
-              f"--years 를 캐시된 봉 수({', '.join(counts) or '없음'})에 맞추세요.")
-        return 2
-    params = ProxyParams(slippage=args.slippage)
-    result = run_proxy_from_cache(app.cache_dir, params, bars=bars)
-    print(result.to_text())
-    out = Path(args.csv_out or "out/friday_proxy.json")
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(result.to_dict(), ensure_ascii=False, indent=2, default=str), encoding="utf-8")
-    print(f"\n결과 저장: {out}")
-    return 0
-
-
-def cmd_friday(args, app, cfg):
-    """금요일 마감 돌파 1회 스캔 (주말을 넘기는 날 14:30~15:15). 토스 소스 전용. 창 안이면 기록도 남긴다."""
-    from screener.friday import FridayRecorder, FridayScanner
-
-    loader = build_loader(args, app, cfg)
-    if not isinstance(loader, TossDataLoader):
-        print("금요일 마감 매매는 토스 1분봉이 필요합니다 (--source toss).")
-        return 2
-    recorder = FridayRecorder(app.order_log.parent / "friday_signals.jsonl")
-    scanner = FridayScanner(loader, build_friday_config(args), max_workers=args.workers, recorder=recorder)
-    report = scanner.scan()
-    print(f"기준일 {report.session} · 후보 {report.scanned} · 포착 {len(report.signals)}"
-          f" · 제외 {len(report.blocked)} · 오류 {report.errors} · 기록 {report.recorded}"
-          f" · 국면 {report.regimes}")
-    if not report.signals:
-        print("포착된 종목 없음 (금요일 14:30~15:15 사이 가장 의미 있습니다)")
-    else:
-        cols = ["진입", "점수", "종목코드", "종목명", "판정시각", "현재가", "등락률%", "급증배수",
-                "매수비중%", "돌파선", "VWAP", "주간변동폭%", "유의사항"]
-        print(pd.DataFrame([{k: s.to_dict()[k] for k in cols} for s in report.signals]).to_string(index=False))
-    filled = recorder.fill_outcomes(loader, datetime.now().date())
-    if filled:
-        print(f"\n지난 신호 {filled}건의 다음 영업일 결과를 채웠습니다.")
-    print("\n※ 백테스트로 검증되지 않은 전략입니다. 주말 뉴스·공시는 직접 확인하세요. 주문은 내지 않습니다.")
-    return 0
-
-
-def cmd_friday_report(args, app, cfg):
-    """P3 — 포워드 기록 리포트 (월요일 시가·09:30·종가 결과). 결과가 비면 먼저 채운다."""
-    from screener.friday import FridayRecorder
-
-    recorder = FridayRecorder(app.order_log.parent / "friday_signals.jsonl")
-    if args.source == "toss" and app.toss_client_id and app.toss_client_secret:
-        try:
-            filled = recorder.fill_outcomes(build_loader(args, app, cfg), datetime.now().date())
-            if filled:
-                print(f"결과 {filled}건을 새로 채웠습니다.")
-        except Exception as exc:
-            print(f"(결과 채우기 건너뜀: {exc})")
-    rep = recorder.report()
-    print(f"기록 후보 {rep['recorded']} · 진입 {rep['recorded_entries']} · 결과 대기 {rep['pending']}"
-          f" · 주 수 {rep['weeks']} · 왕복 비용 {rep['cost'] * 100:.2f}%")
-    for name, g in rep["groups"].items():
-        print(f"  {name:<22} " + (" · ".join(f"{k} {v}" for k, v in g.items()) if g["건수"] else "(결과 없음)"))
-    print("\n" + rep["note"])
-    return 0
-
-
-def cmd_supply(args, app, cfg):
-    """수급 포착 매매 1회 스캔 (장 초반 거래량 급증 + 수급 연속성). 토스 소스 전용."""
-    from screener.supply import SupplyConfig, SupplyScanner
-
-    loader = build_loader(args, app, cfg)
-    if not isinstance(loader, TossDataLoader):
-        print("수급 포착 매매는 토스 1분봉이 필요합니다 (--source toss).")
-        return 2
-    report = SupplyScanner(loader, SupplyConfig(), max_workers=args.workers).scan()
-    print(f"기준일 {report.session} · 후보 {report.scanned} · 포착 {len(report.signals)}"
-          f" · 제외 {len(report.blocked)} · 오류 {report.errors}")
-    if not report.signals:
-        print("포착된 종목 없음")
-        return 0
-    cols = ["상태", "점수", "종목코드", "종목명", "판정시각", "현재가", "등락률%", "급증배수",
-            "매수비중%", "VWAP", "손절가", "가격위치%", "유의사항"]
-    rows = [{k: s.to_dict()[k] for k in cols} for s in report.signals]
-    print(pd.DataFrame(rows).to_string(index=False))
-    print("\n※ 백테스트로 검증되지 않은 전략입니다. 재료(뉴스·공시)는 직접 확인하세요.")
-    return 0
-
-
 def cmd_explain(args, app, cfg):
     loader = build_loader(args, app, cfg)
     det = PatternDetector(cfg)
@@ -283,9 +178,6 @@ def cmd_web(args, app, cfg):
         max_order_amount=app.max_order_amount, order_log=app.order_log,
         bollinger_log=app.order_log.parent / "bollinger.log",
         max_sessions=args.max_sessions,
-        supply_interval=args.supply_interval,
-        friday_cfg=build_friday_config(args),
-        friday_log=app.order_log.parent / "friday_signals.jsonl",
         mail={"host": app.mail_smtp_host, "port": app.mail_smtp_port,
               "user": app.mail_smtp_user, "password": app.mail_smtp_pass,
               "crypto": app.mail_smtp_crypto, "from_name": app.mail_from_name}
@@ -322,23 +214,6 @@ def cmd_web(args, app, cfg):
                     else None),
             log_path=app.order_log.parent / "bollinger.log")
 
-    # 수급 포착 매매 (서버 기본 자격증명용). 시세만 보므로 주문과 무관하다.
-    supply = None
-    if isinstance(loader, TossDataLoader):
-        from screener.supply import SupplyConfig, SupplyScanner, SupplyService
-        supply = SupplyService(
-            SupplyScanner(loader, SupplyConfig(), max_workers=args.workers),
-            interval=args.supply_interval)
-
-    # 금요일 마감 돌파 (서버 기본 자격증명용). 시세만 보고 주문과 무관하다.
-    friday = None
-    if isinstance(loader, TossDataLoader):
-        from screener.friday import FridayRecorder, FridayScanner, FridayService
-        friday = FridayService(
-            FridayScanner(loader, build_friday_config(args), max_workers=args.workers,
-                          recorder=FridayRecorder(app.order_log.parent / "friday_signals.jsonl")),
-            interval=args.supply_interval)
-
     # 로그인·설정 저장소 (SQLite). `--no-login` 이면 예전처럼 인증 없이 뜬다.
     store = None
     if not args.no_login:
@@ -363,7 +238,7 @@ def cmd_web(args, app, cfg):
     application = create_app(loader, cfg, interval=args.interval, top=args.top or 0,
                              limit=args.limit, live=args.live, notifier=notifier,
                              workers=args.workers, trading=trading, sessions=sessions,
-                             bollinger=bollinger, supply=supply, friday=friday, store=store,
+                             bollinger=bollinger, store=store,
                              signup=app.signup_enabled, signup_code=app.signup_code)
     print(f"대시보드: http://{args.host}:{args.port}"
           + (" (로그인 필요)" if store else ""))
@@ -472,10 +347,6 @@ def main(argv=None) -> int:
     p.add_argument("--out", help="시그널 JSONL 저장 경로")
     p.add_argument("--csv-out", help="시그널 CSV 저장 경로")
     p.add_argument("--no-telegram", action="store_true")
-    p.add_argument("--supply-interval", type=int, default=60,
-                   help="web: 수급 포착 매매 장중 스캔 주기(초). 장 밖에서는 30분에 한 번")
-    p.add_argument("--friday-extra-days", default="",
-                   help="금요일 마감 매매: 금요일이 휴장일일 때 주말 직전 영업일(YYYY-MM-DD, 콤마 구분)")
     p.add_argument("--max-sessions", type=int, default=20,
                    help="web: 개인 API 키 세션 동시 접속 상한 (세션마다 스캔 스레드 1개)")
     p.add_argument("--no-trading", action="store_true",
@@ -521,8 +392,7 @@ def main(argv=None) -> int:
     p.add_argument("--password", help="adduser: 비밀번호를 인자로 준다 "
                                       "(셸 기록에 남으니 되도록 대화식 입력을 쓸 것)")
     p.add_argument("command", choices=["scan", "watch", "poll", "web", "backtest",
-                                       "explain", "demo", "bollinger", "adduser", "supply",
-                                       "friday", "friday-bt", "friday-report"])
+                                       "explain", "demo", "bollinger", "adduser"])
     p.add_argument("username", nargs="?", help="adduser: 만들 계정 아이디")
 
     args = p.parse_args(argv)
@@ -553,8 +423,7 @@ def main(argv=None) -> int:
     handler = {"scan": cmd_scan, "watch": cmd_watch, "poll": cmd_poll, "web": cmd_web,
                "backtest": cmd_backtest, "explain": cmd_explain, "demo": cmd_demo,
                "bollinger": cmd_bollinger, "adduser": cmd_adduser,
-               "supply": cmd_supply, "friday": cmd_friday, "friday-bt": cmd_friday_bt,
-               "friday-report": cmd_friday_report}[args.command]
+               }[args.command]
     try:
         return handler(args, app, cfg)
     except KeyboardInterrupt:

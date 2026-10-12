@@ -4,82 +4,83 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>볼린저 밴드 반전 매매 · 왔니 주식</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="/static/ui.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="/static/common.css">
 <script src="/static/gnb.js"></script>
-<script src="/static/offcanvas.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+<script src="/static/ui.js"></script>
 <script src="/static/session.js"></script>
+<script src="/static/offcanvas.js"></script>
 </head>
-<body class="font-sans text-sm leading-normal antialiased">
+<body>
 <div data-gnb="bollinger"></div>
 
 <!-- GNB 우측으로 옮겨질 공통 컨트롤 (gnb.js 가 이동시킨다) -->
-<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
-             bg-s2 text-txt2 border border-line" id="status" data-gnb-action>
-  <span class="w-[7px] h-[7px] rounded-full bg-txt3" id="status-dot"></span>
+<span class="d-inline-flex align-items-center gap-2 px-2 py-1 rounded-pill small fw-semibold
+             bg-s2 text-body-secondary border border-line" id="status" data-gnb-action>
+  <span class="rounded-circle d-inline-block bg-secondary" style="width:7px;height:7px" id="status-dot"></span>
   <span id="status-text">연결 중…</span></span>
 <button data-settings-btn title="내 토스 API 키 설정" data-gnb-action hidden>⚙ 설정</button>
 
-<div class="max-w-page mx-auto px-5 pt-5 pb-14">
-  <div class="flex flex-wrap gap-3 items-center mb-4">
-    <h1 class="m-0 text-[19px] font-semibold tracking-tight">볼린저 밴드 반전 매매
-      <span class="text-txt3 font-normal text-[13px] ml-2" id="mode-label"></span></h1>
-    <div class="flex-1"></div>
-    <button class="font-sans text-sm rounded-lg border border-line bg-s1 text-txt px-3.5 py-1.5 hover:bg-s2 disabled:opacity-50 disabled:cursor-not-allowed" id="run-btn">지금 점검</button>
-    <button class="font-sans text-sm rounded-lg border border-transparent bg-bad text-white font-semibold px-3.5 py-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" id="mode-btn">모의 ↔ 실주문</button>
-    <button class="font-sans text-sm rounded-lg border border-transparent bg-accent text-white font-semibold px-3.5 py-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" id="power-btn">봇 시작</button>
+<div class="page-wrap mx-auto px-3 px-md-4 pt-4 pb-5">
+  <div class="d-flex flex-wrap gap-3 align-items-center mb-3">
+    <h1 class="m-0 fs-5 fw-semibold">볼린저 밴드 반전 매매
+      <span class="text-body-tertiary fw-normal small ms-2" id="mode-label"></span></h1>
+    <div class="flex-grow-1"></div>
+    <button class="btn btn-sm btn-outline-secondary" id="run-btn">지금 점검</button>
+    <button class="btn btn-sm btn-danger fw-semibold" id="mode-btn">모의 ↔ 실주문</button>
+    <button class="btn btn-sm btn-primary fw-semibold" id="power-btn">봇 시작</button>
   </div>
 
   <div id="setup" hidden></div>
-  <div id="err" class="tint-bad border border-bad px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
+  <div id="err" class="tint-bad border border-bad px-3 py-2 rounded-3 mb-3 small" hidden></div>
   <!-- 실주문 경고 배너 — 실주문 모드에서만 보인다. 색을 약하게 바꾸지 말 것. -->
-  <div id="live" class="tint-bad border border-bad px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]
-       flex flex-wrap gap-2.5 items-center" hidden></div>
-  <div id="note" class="tint-warn border border-warn px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
+  <div id="live" class="tint-bad border border-bad px-3 py-2 rounded-3 mb-3 small
+       d-flex flex-wrap gap-2 align-items-center" hidden></div>
+  <div id="note" class="tint-warn border border-warn px-3 py-2 rounded-3 mb-3 small" hidden></div>
 
-  <section class="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-2.5 mb-4" aria-label="요약">
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">봇 상태</div>
-      <div class="text-[19px] font-semibold tracking-tight tabular-nums" id="t-run">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">주문 모드</div>
-      <div class="text-[19px] font-semibold tracking-tight tabular-nums" id="t-mode">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">감시 종목</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-symbols">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">보유 종목</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-pos">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">주문가능 현금</div>
-      <div class="text-[19px] font-semibold tracking-tight tabular-nums" id="t-cash">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">평가손익</div>
-      <div class="text-[19px] font-semibold tracking-tight tabular-nums" id="t-pl">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">마지막 점검</div>
-      <div class="text-[17px] font-semibold tabular-nums" id="t-last">–</div></div>
+  <section class="row row-cols-2 row-cols-md-4 g-2 mb-3" aria-label="요약">
+    <div class="col"><div class="card card-body px-3 py-3 h-100">
+      <div class="small text-body-tertiary mb-1">봇 상태</div>
+      <div class="fs-5 fw-semibold tnum" id="t-run">–</div></div></div>
+    <div class="col"><div class="card card-body px-3 py-3 h-100">
+      <div class="small text-body-tertiary mb-1">주문 모드</div>
+      <div class="fs-5 fw-semibold tnum" id="t-mode">–</div></div></div>
+    <div class="col"><div class="card card-body px-3 py-3 h-100">
+      <div class="small text-body-tertiary mb-1">감시 종목</div>
+      <div class="fs-3 fw-semibold tnum" id="t-symbols">–</div></div></div>
+    <div class="col"><div class="card card-body px-3 py-3 h-100">
+      <div class="small text-body-tertiary mb-1">보유 종목</div>
+      <div class="fs-3 fw-semibold tnum" id="t-pos">–</div></div></div>
+    <div class="col"><div class="card card-body px-3 py-3 h-100">
+      <div class="small text-body-tertiary mb-1">주문가능 현금</div>
+      <div class="fs-5 fw-semibold tnum" id="t-cash">–</div></div></div>
+    <div class="col"><div class="card card-body px-3 py-3 h-100">
+      <div class="small text-body-tertiary mb-1">평가손익</div>
+      <div class="fs-5 fw-semibold tnum" id="t-pl">–</div></div></div>
+    <div class="col"><div class="card card-body px-3 py-3 h-100">
+      <div class="small text-body-tertiary mb-1">마지막 점검</div>
+      <div class="fs-6 fw-semibold tnum" id="t-last">–</div></div></div>
   </section>
 
-  <div class="flex gap-1 border-b border-line mb-3.5" role="tablist">
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="watch" aria-selected="true">감시 현황<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-watch">0</span></button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="positions" aria-selected="false">보유<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-pos">0</span></button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="events" aria-selected="false">체결 · 로그<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-ev">0</span></button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="config" aria-selected="false">전략 설정</button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="rules" aria-selected="false">매매 규칙</button>
-    <div class="flex-1"></div>
-    <button class="self-center text-sm rounded-lg border border-line bg-s1 text-txt px-3 py-1 mb-1.5
-            hover:bg-s2" id="add-btn" type="button">＋ 종목 추가</button>
-  </div>
+  <ul class="nav nav-tabs align-items-end mb-3" role="tablist">
+    <li class="nav-item"><button class="tab nav-link active" type="button" role="tab" data-tab="watch" aria-selected="true">감시 현황<span class="badge rounded-pill bg-s2 text-body-secondary ms-1" id="c-watch">0</span></button></li>
+    <li class="nav-item"><button class="tab nav-link" type="button" role="tab" data-tab="positions" aria-selected="false">보유<span class="badge rounded-pill bg-s2 text-body-secondary ms-1" id="c-pos">0</span></button></li>
+    <li class="nav-item"><button class="tab nav-link" type="button" role="tab" data-tab="events" aria-selected="false">체결 · 로그<span class="badge rounded-pill bg-s2 text-body-secondary ms-1" id="c-ev">0</span></button></li>
+    <li class="nav-item"><button class="tab nav-link" type="button" role="tab" data-tab="config" aria-selected="false">전략 설정</button></li>
+    <li class="nav-item"><button class="tab nav-link" type="button" role="tab" data-tab="rules" aria-selected="false">매매 규칙</button></li>
+    <li class="ms-auto pb-1"><button class="btn btn-sm btn-outline-secondary" id="add-btn" type="button">＋ 종목 추가</button></li>
+  </ul>
 
   <div id="view"></div>
   <div id="detail"></div>
 
-  <footer class="mt-6 text-xs text-txt3 text-center">투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 데이터·주문: 토스증권 OpenAPI</footer>
+  <footer class="mt-4 small text-body-tertiary text-center">투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 데이터·주문: 토스증권 OpenAPI</footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 const fmt = (n, d = 0) => n == null || Number.isNaN(Number(n)) ? "–" :
@@ -95,20 +96,19 @@ const ACT_LABEL = {
 };
 /* 액션 강조색 — 매수=적색, 매도계열=청색(한국 시장 관례), 손절은 위험색으로 도드라지게. */
 const ACT_CLS = {
-  BUY: "text-up font-bold", SELL: "text-down font-bold", TAKE_PROFIT: "text-down font-bold",
-  STOP: "text-bad font-bold", SYSTEM: "text-accent font-bold",
-  HOLD: "text-txt3", ERROR: "text-txt3", NODATA: "text-txt3",
+  BUY: "text-up fw-bold", SELL: "text-down fw-bold", TAKE_PROFIT: "text-down fw-bold",
+  STOP: "text-bad fw-bold", SYSTEM: "text-accent fw-bold",
+  HOLD: "text-body-tertiary", ERROR: "text-body-tertiary", NODATA: "text-body-tertiary",
 };
 const tossUrl = (s) => `https://www.tossinvest.com/stocks/${encodeURIComponent(s)}`;
 /* 종목 링크는 그리드 행 클릭(상세 열기)과 겹치지 않게 stopPropagation 한다. */
 const tossLink = (code, text, cls = "") =>
-  `<a class="no-underline text-inherit border-b border-dotted border-txt3 hover:text-accent
-      hover:border-accent ${cls}" href="${tossUrl(code)}" target="_blank" rel="noopener noreferrer"
+  `<a class="text-reset text-decoration-underline ${cls}" style="text-decoration-style:dotted !important;text-underline-offset:3px" href="${tossUrl(code)}" target="_blank" rel="noopener noreferrer"
       onclick="event.stopPropagation()">${text}</a>`;
 
 const EMPTY = (text) =>
-  `<div class="bg-s1 border border-line rounded-xl py-11 px-5 text-center text-txt3">${text}</div>`;
-const CARD = "bg-s1 border border-line rounded-xl";
+  `<div class="card card-body py-5 px-4 text-center text-body-tertiary">${text}</div>`;
+const CARD = "card";
 
 /* ------------------------------------------------------------------ 상태 */
 async function refresh() {
@@ -140,9 +140,9 @@ function maybeKickRun() {
   fetch("/api/bollinger/run", { method: "POST" }).catch(() => { KICKED = ""; });
 }
 
-const DOT = { live: "bg-good dot-live", busy: "bg-warn dot-busy", err: "bg-bad", "": "bg-txt3" };
+const DOT = { live: "bg-good dot-live", busy: "bg-warning dot-busy", err: "bg-bad", "": "bg-secondary" };
 function setStatus(kind, text) {
-  $("#status-dot").className = `w-[7px] h-[7px] rounded-full ${DOT[kind] || DOT[""]}`;
+  $("#status-dot").className = `rounded-circle d-inline-block ${DOT[kind] || DOT[""]}`;
   $("#status-text").textContent = text;
 }
 
@@ -170,16 +170,16 @@ function paint() {
 
   $("#t-run").innerHTML = s.running ? "가동 중" : "정지";
   $("#t-mode").innerHTML = s.live
-    ? `<span class="text-up font-semibold">실주문 ⚠</span>`
-    : `<span class="text-txt3">모의</span>`;
+    ? `<span class="text-up fw-semibold">실주문 ⚠</span>`
+    : `<span class="text-body-tertiary">모의</span>`;
   $("#t-symbols").innerHTML = fmt((cfg.symbols || []).length)
-    + `<small class="text-[13px] font-medium text-txt3 ml-1">종목</small>`;
+    + `<small class="small fw-medium text-body-tertiary ms-1">종목</small>`;
   $("#t-pos").innerHTML = fmt((s.positions || []).length)
-    + `<small class="text-[13px] font-medium text-txt3 ml-1">종목</small>`;
+    + `<small class="small fw-medium text-body-tertiary ms-1">종목</small>`;
   $("#t-cash").textContent = fmt(s.cash) + "원";
   const pl = (s.equity || {})["평가손익"];
   $("#t-pl").innerHTML = pl == null ? "–" :
-    `<span class="${pl >= 0 ? "text-up" : "text-down"} font-semibold">${pl >= 0 ? "+" : ""}${fmt(pl)}원</span>`;
+    `<span class="${pl >= 0 ? "text-up" : "text-down"} fw-semibold">${pl >= 0 ? "+" : ""}${fmt(pl)}원</span>`;
   $("#t-last").textContent = s.last_run ? s.last_run.slice(11) : "–";
 
   $("#c-watch").textContent = (s.decisions || []).length;
@@ -200,7 +200,7 @@ function paint() {
   }
 
   const notes = [];
-  if (!s.trading_allowed) notes.push("서버 실거래 스위치가 꺼져 있어 <b>모의 주문만</b> 가능합니다 (설정의 '실주문 허용'과 서버 <code class=\"bg-s2 px-1.5 py-0.5 rounded\">TOSS_TRADING_ENABLED</code> 가 모두 필요).");
+  if (!s.trading_allowed) notes.push("서버 실거래 스위치가 꺼져 있어 <b>모의 주문만</b> 가능합니다 (설정의 '실주문 허용'과 서버 <code>TOSS_TRADING_ENABLED</code> 가 모두 필요).");
   if (!(cfg.symbols || []).length) notes.push("감시 종목이 없습니다 — 오른쪽 위 <b>＋ 종목 추가</b> 버튼으로 종목코드를 넣으세요.");
   if (s.running && !s.market_open) notes.push("정규장(09:00~15:30) 시간이 아닙니다 — 판정만 하고 주문은 내지 않습니다.");
   if ((s.adopted || []).length) notes.push(
@@ -216,10 +216,14 @@ function paint() {
 
 /* ------------------------------------------------------------------ 탭 */
 document.querySelectorAll(".tab").forEach(btn => {
+  btn.classList.toggle("active", btn.dataset.tab === TAB);
   btn.setAttribute("aria-selected", String(btn.dataset.tab === TAB));
   btn.onclick = () => {
     TAB = btn.dataset.tab;
-    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+    document.querySelectorAll(".tab").forEach(b => {
+      b.classList.toggle("active", b === btn);
+      b.setAttribute("aria-selected", String(b === btn));
+    });
     renderTab();
   };
 });
@@ -252,13 +256,13 @@ function dropGrid() { if (GRID) { GRID.destroy(); GRID = null; } GRID_KIND = nul
  *  폴링(5초)마다 새로 만들지 않고 setGridOption("rowData") 로 갱신한다. */
 function gridHost(clickable) {
   if (GRID) { GRID.destroy(); GRID = null; }
-  $("#view").innerHTML = `<div id="grid" class="${clickable ? "grid-clickable " : ""}w-full h-[min(60vh,560px)]"></div>`;
+  $("#view").innerHTML = `<div id="grid" class="${clickable ? "grid-clickable " : ""}w-100" style="height:min(60vh,560px)"></div>`;
   return $("#grid");
 }
 
 /* 선택된 종목 행을 표시한다 (아래 상세 차트와 짝) */
 const rowSymbol = (d) => (d && (d["종목코드"] || d.symbol)) || null;
-const ROW_CLASS = { "!bg-s2": (p) => !!SELECTED && rowSymbol(p.data) === SELECTED };
+const ROW_CLASS = { "bg-s2": (p) => !!SELECTED && rowSymbol(p.data) === SELECTED };
 function repaintRows() { if (GRID) GRID.redrawRows(); }
 
 /* ERROR·NODATA 행은 지표가 없어 사유 한 줄만 길게 보여준다 (예전 colspan 표시 유지) */
@@ -267,7 +271,7 @@ const isBad = (r) => r && (r["액션"] === "ERROR" || r["액션"] === "NODATA");
 const actCol = (headerName, headerTooltip) => ({
   field: "액션", headerName, headerTooltip, minWidth: 104,
   valueFormatter: (p) => ACT_LABEL[p.value] || p.value,
-  cellClass: (p) => ACT_CLS[p.value] || "text-txt3",
+  cellClass: (p) => ACT_CLS[p.value] || "text-body-tertiary",
 });
 const numCol = (field, headerName, opts = {}) => ({
   field, headerName, type: "numericColumn", minWidth: 96,
@@ -278,10 +282,10 @@ const numCol = (field, headerName, opts = {}) => ({
 function pbGauge(v) {
   if (v == null || Number.isNaN(v)) return "–";
   const pos = Math.max(0, Math.min(1, v)) * 100;
-  return `<span class="relative inline-block align-middle w-[90px] h-[7px] rounded-full bg-s2"
-            title="%B ${v.toFixed(2)}"><i class="absolute -top-0.5 w-[3px] h-[11px] rounded-sm bg-txt"
-            style="left:calc(${pos}% - 1px)"></i></span>
-          <span class="text-txt3 ml-1.5">${v.toFixed(2)}</span>`;
+  return `<span class="position-relative d-inline-block align-middle rounded-pill bg-s2"
+            style="width:90px;height:7px" title="%B ${v.toFixed(2)}"><i class="position-absolute rounded-1"
+            style="top:-2px;width:3px;height:11px;background:var(--text-primary);left:calc(${pos}% - 1px)"></i></span>
+          <span class="text-body-tertiary ms-2">${v.toFixed(2)}</span>`;
 }
 
 function renderWatch() {
@@ -304,34 +308,34 @@ function renderWatch() {
         delCol(),
         actCol("판정", TIPS["판정"]),
         { field: "종목코드", minWidth: 104,
-          cellRenderer: (p) => tossLink(p.value, p.value, "font-semibold") },
+          cellRenderer: (p) => tossLink(p.value, p.value, "fw-semibold") },
         { field: "종목명", minWidth: 130,
           cellRenderer: (p) => tossLink(p.data["종목코드"], p.value || p.data["종목코드"]) },
         { ...numCol("close", "현재가"),
           // 지표가 없는 행은 나머지 8칸을 합쳐 사유만 보여준다
           colSpan: (p) => isBad(p.data) ? 8 : 1,
-          cellClass: (p) => isBad(p.data) ? "text-left text-txt3 whitespace-normal" : "tabular-nums",
+          cellClass: (p) => isBad(p.data) ? "text-start text-body-tertiary text-wrap" : "tnum",
           valueFormatter: (p) => isBad(p.data) ? (p.data["사유"] || "") : fmt(p.value) },
         { ...numCol("lower", "하한선", { headerTooltip: TIPS["하한선"] }),
-          cellClass: "tabular-nums text-down font-semibold" },
+          cellClass: "tnum text-down fw-semibold" },
         { ...numCol("mid", "중앙선", { headerTooltip: TIPS["중앙선"] }),
-          cellClass: "tabular-nums text-txt3" },
+          cellClass: "tnum text-body-tertiary" },
         { ...numCol("upper", "상한선", { headerTooltip: TIPS["상한선"] }),
-          cellClass: "tabular-nums text-up font-semibold" },
+          cellClass: "tnum text-up fw-semibold" },
         { ...numCol("rsi", "RSI", { headerTooltip: TIPS["RSI"], d: 1, minWidth: 84 }),
-          cellClass: (p) => "tabular-nums " + (p.value <= STATE.config.rsi_buy
-            ? "text-down font-semibold"
-            : p.value >= STATE.config.rsi_sell ? "text-up font-semibold" : "") },
+          cellClass: (p) => "tnum " + (p.value <= STATE.config.rsi_buy
+            ? "text-down fw-semibold"
+            : p.value >= STATE.config.rsi_sell ? "text-up fw-semibold" : "") },
         { field: "percent_b", headerName: "%B", headerTooltip: TIPS["%B"], minWidth: 150,
           cellRenderer: (p) => pbGauge(p.value) },
         { field: "bandwidth", headerName: "밴드폭", headerTooltip: TIPS["밴드폭"],
-          type: "numericColumn", minWidth: 96, cellClass: "tabular-nums text-txt3",
+          type: "numericColumn", minWidth: 96, cellClass: "tnum text-body-tertiary",
           valueFormatter: (p) => p.value == null ? "–" : (p.value * 100).toFixed(1) + "%" },
         { field: "사유", minWidth: 220, flex: 1, sortable: false,
-          cellClass: "text-left text-txt3 whitespace-normal leading-[1.35]",
+          cellClass: "text-start text-body-tertiary text-wrap", cellStyle: { lineHeight: 1.35 },
           tooltipValueGetter: (p) => p.value || "",
           cellRenderer: (p) => `${p.value || ""}${p.data["결과"] && p.data["결과"].message
-            ? `<div class="text-txt3">→ ${p.data["결과"].message}</div>` : ""}` },
+            ? `<div class="text-body-tertiary">→ ${p.data["결과"].message}</div>` : ""}` },
       ],
       onRow: (data, ev) => { if (!removeFromEvent(ev)) selectSymbol(data["종목코드"]); },
     });
@@ -349,8 +353,8 @@ function delCol() {
       const sym = p.data["종목코드"];
       const held = (STATE.positions || []).some(x => x.symbol === sym);
       return held
-        ? `<span class="text-txt3" title="보유 중 — 청산 후에 삭제할 수 있습니다">🔒</span>`
-        : `<button type="button" class="sf-del text-bad text-base leading-none hover:brightness-125"
+        ? `<span class="text-body-tertiary" title="보유 중 — 청산 후에 삭제할 수 있습니다">🔒</span>`
+        : `<button type="button" class="sf-del btn btn-link btn-sm p-0 text-bad text-decoration-none lh-1"
              data-del="${sym}" title="감시 목록에서 삭제" aria-label="삭제">✕</button>`;
     } };
 }
@@ -372,22 +376,22 @@ function renderPositions() {
       rows, options: { rowClassRules: ROW_CLASS },
       columns: [
         { field: "symbol", headerName: "종목코드", minWidth: 104,
-          cellRenderer: (p) => tossLink(p.value, p.value, "font-semibold") },
+          cellRenderer: (p) => tossLink(p.value, p.value, "fw-semibold") },
         { field: "name", headerName: "종목명", minWidth: 130,
           cellRenderer: (p) => tossLink(p.data.symbol, p.value || p.data.symbol) },
         numCol("quantity", "수량", { valueFormatter: (p) => fmt(p.value) + "주" }),
         numCol("entry_price", "매수평단"),
         // 손절선은 봇이 아니라 화면에서 계산한다 (매수평단 × (1 − 손절폭))
         { headerName: "손절선", colId: "stop", type: "numericColumn", minWidth: 96,
-          cellClass: "tabular-nums text-down font-semibold",
+          cellClass: "tnum text-down fw-semibold",
           valueGetter: (p) => p.data.entry_price * (1 - STATE.config.stop_loss_pct),
           valueFormatter: (p) => fmt(p.value) },
-        { field: "mid_taken", headerName: "부분익절", minWidth: 96, cellClass: "text-txt3",
+        { field: "mid_taken", headerName: "부분익절", minWidth: 96, cellClass: "text-body-tertiary",
           valueFormatter: (p) => p.value ? "완료" : "대기" },
-        { field: "entered_at", headerName: "진입시각", minWidth: 120, cellClass: "text-txt3 tabular-nums",
+        { field: "entered_at", headerName: "진입시각", minWidth: 120, cellClass: "text-body-tertiary tnum",
           valueFormatter: (p) => (p.value || "").slice(5) },
         { field: "adopted", headerName: "메모", minWidth: 180, flex: 1, sortable: false,
-          cellClass: (p) => "text-left " + (p.value ? "text-up font-semibold" : "text-txt3"),
+          cellClass: (p) => "text-start " + (p.value ? "text-up fw-semibold" : "text-body-tertiary"),
           valueFormatter: (p) => p.value
             ? (STATE.config.manage_existing ? "기존 보유분 (관리 중)" : "기존 보유분 (청산 안 함)")
             : "봇 매수" },
@@ -407,12 +411,12 @@ function renderEvents() {
     GRID = Grid.create(gridHost(false), {          // 로그는 행 클릭 대상이 아니다
       rows,
       columns: [
-        { field: "ts", headerName: "시각", minWidth: 130, cellClass: "text-txt3 tabular-nums",
+        { field: "ts", headerName: "시각", minWidth: 130, cellClass: "text-body-tertiary tnum",
           valueFormatter: (p) => (p.value || "").slice(5) },
         actCol("액션"),
-        { field: "상태", minWidth: 110, cellClass: "text-txt3" },
+        { field: "상태", minWidth: 110, cellClass: "text-body-tertiary" },
         { field: "내용", minWidth: 260, flex: 1, sortable: false,
-          cellClass: "text-left whitespace-normal leading-[1.35]",
+          cellClass: "text-start text-wrap", cellStyle: { lineHeight: 1.35 },
           tooltipValueGetter: (p) => p.value || "" },
       ],
     });
@@ -425,80 +429,80 @@ function renderEvents() {
 function renderConfig() {
   dropGrid();
   const c = STATE.config || {}, u = UI.cls;
-  const GRID3 = "grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-2.5";
-  const CHECK = "flex items-center gap-2 text-[13px] mt-2.5 [&_input]:w-4 [&_input]:h-4";
-  $("#view").innerHTML = `<div class="${CARD} px-[18px] py-4 grid gap-3.5">
-    <fieldset class="${u.fieldset} !mb-0">
+  const GRID3 = "row row-cols-1 row-cols-sm-2 row-cols-lg-3 g-2";
+  const CHECK = "form-check mt-2 small";
+  $("#view").innerHTML = `<div class="${CARD} card-body">
+    <fieldset class="${u.fieldset}">
       <legend class="${u.legend}">지표</legend>
       <div class="${GRID3}">
-        <div><label class="${u.label}" for="c-interval">봉 주기</label>
+        <div class="col"><label class="${u.label}" for="c-interval">봉 주기</label>
           <select class="${u.input}" id="c-interval">${["1m", "5m", "15m", "30m", "60m", "1d"]
             .map(v => `<option value="${v}"${v === c.interval ? " selected" : ""}>${v}</option>`).join("")}</select>
           <div class="${u.hint}">분봉은 1분봉을 합쳐 만듭니다</div></div>
-        <div><label class="${u.label}" for="c-bbp">볼린저 기간</label>
+        <div class="col"><label class="${u.label}" for="c-bbp">볼린저 기간</label>
           <input class="${u.input}" type="number" id="c-bbp" min="5" max="200" value="${c.bb_period}"></div>
-        <div><label class="${u.label}" for="c-bbs">표준편차 배수</label>
+        <div class="col"><label class="${u.label}" for="c-bbs">표준편차 배수</label>
           <input class="${u.input}" type="number" id="c-bbs" min="0.5" max="5" step="0.1" value="${c.bb_stddev}"></div>
-        <div><label class="${u.label}" for="c-rsip">RSI 기간</label>
+        <div class="col"><label class="${u.label}" for="c-rsip">RSI 기간</label>
           <input class="${u.input}" type="number" id="c-rsip" min="2" max="100" value="${c.rsi_period}"></div>
-        <div><label class="${u.label}" for="c-rsib">RSI 매수 기준(이하)</label>
+        <div class="col"><label class="${u.label}" for="c-rsib">RSI 매수 기준(이하)</label>
           <input class="${u.input}" type="number" id="c-rsib" min="1" max="50" value="${c.rsi_buy}"></div>
-        <div><label class="${u.label}" for="c-rsis">RSI 매도 기준(이상)</label>
+        <div class="col"><label class="${u.label}" for="c-rsis">RSI 매도 기준(이상)</label>
           <input class="${u.input}" type="number" id="c-rsis" min="50" max="99" value="${c.rsi_sell}"></div>
       </div>
     </fieldset>
 
-    <fieldset class="${u.fieldset} !mb-0">
+    <fieldset class="${u.fieldset}">
       <legend class="${u.legend}">자금 운용</legend>
       <div class="${GRID3}">
-        <div><label class="${u.label}" for="c-ratio">1회 매수 예수금 비율(%)</label>
+        <div class="col"><label class="${u.label}" for="c-ratio">1회 매수 예수금 비율(%)</label>
           <input class="${u.input}" type="number" id="c-ratio" min="1" max="100" value="${Math.round(c.cash_ratio * 100)}">
           <div class="${u.hint}">1회 주문 한도 ${fmt(STATE.max_order_amount)}원도 함께 적용됩니다</div></div>
-        <div><label class="${u.label}" for="c-maxpos">동시 보유 종목 수</label>
+        <div class="col"><label class="${u.label}" for="c-maxpos">동시 보유 종목 수</label>
           <input class="${u.input}" type="number" id="c-maxpos" min="1" max="20" value="${c.max_positions}"></div>
-        <div><label class="${u.label}" for="c-minamt">최소 주문 금액(원)</label>
+        <div class="col"><label class="${u.label}" for="c-minamt">최소 주문 금액(원)</label>
           <input class="${u.input}" type="number" id="c-minamt" min="1000" step="10000" value="${c.min_order_amount}"></div>
-        <div><label class="${u.label}" for="c-poll">점검 주기(초)</label>
+        <div class="col"><label class="${u.label}" for="c-poll">점검 주기(초)</label>
           <input class="${u.input}" type="number" id="c-poll" min="20" max="3600" step="10" value="${STATE.poll_interval}"></div>
       </div>
       <div class="${GRID3}">
-        <div><label class="${u.label}" for="c-slip">매수 지정가 상단(%)</label>
+        <div class="col"><label class="${u.label}" for="c-slip">매수 지정가 상단(%)</label>
           <input class="${u.input}" type="number" id="c-slip" min="0" max="5" step="0.1" value="${((c.buy_slippage || 0) * 100).toFixed(1)}">
           <div class="${u.hint}">현재가 + 이 % 를 상한으로 지정가 매수 (0이면 현재가). 너무 비싼 값에 안 사도록 슬리피지를 제한합니다</div></div>
-        <div><label class="${u.label}" for="c-cancel">미체결 회수(초)</label>
+        <div class="col"><label class="${u.label}" for="c-cancel">미체결 회수(초)</label>
           <input class="${u.input}" type="number" id="c-cancel" min="30" max="3600" step="30" value="${c.buy_cancel_after || 180}">
           <div class="${u.hint}">이 시간 안에 체결 안 되면 매수 주문을 취소합니다 (기본 180초=3분)</div></div>
       </div>
     </fieldset>
 
-    <fieldset class="${u.fieldset} !mb-0">
+    <fieldset class="${u.fieldset}">
       <legend class="${u.legend}">리스크 관리</legend>
       <div class="${GRID3}">
-        <div><label class="${u.label}" for="c-stop">강제 손절 폭(%)</label>
+        <div class="col"><label class="${u.label}" for="c-stop">강제 손절 폭(%)</label>
           <input class="${u.input}" type="number" id="c-stop" min="0.5" max="50" step="0.5" value="${(c.stop_loss_pct * 100).toFixed(1)}">
           <div class="${u.hint}">밴드 라이딩 방지용 — 조건 불문 전량 매도</div></div>
-        <div><label class="${u.label}" for="c-midratio">중앙선 부분 익절 비율(%)</label>
+        <div class="col"><label class="${u.label}" for="c-midratio">중앙선 부분 익절 비율(%)</label>
           <input class="${u.input}" type="number" id="c-midratio" min="10" max="100" value="${Math.round(c.mid_take_ratio * 100)}"></div>
       </div>
       <div class="${CHECK}">
-        <input type="checkbox" id="c-midtp" ${c.mid_take_profit ? "checked" : ""}>
-        <label for="c-midtp" class="m-0">중앙선 도달 시 부분 익절 사용</label>
+        <input class="form-check-input" type="checkbox" id="c-midtp" ${c.mid_take_profit ? "checked" : ""}>
+        <label for="c-midtp" class="form-check-label">중앙선 도달 시 부분 익절 사용</label>
       </div>
       <div class="${CHECK}">
-        <input type="checkbox" id="c-manage" ${c.manage_existing ? "checked" : ""}>
-        <label for="c-manage" class="m-0">⚠ 기존 보유분도 관리 (봇이 사지 않은 물량까지 청산)</label>
+        <input class="form-check-input" type="checkbox" id="c-manage" ${c.manage_existing ? "checked" : ""}>
+        <label for="c-manage" class="form-check-label">⚠ 기존 보유분도 관리 (봇이 사지 않은 물량까지 청산)</label>
       </div>
       <div class="${u.hint}">끄면 봇이 <b>직접 매수한 물량만</b> 팝니다. 장기 보유 종목을 감시 목록에
         넣었을 때 첫 주기에 청산되는 사고를 막는 안전장치이니, 의도한 경우에만 켜세요.</div>
     </fieldset>
 
-    <div class="flex gap-2 items-center flex-wrap">
+    <div class="d-flex gap-2 align-items-center flex-wrap">
       <button class="${u.btnPrimary}" id="c-save">설정 저장</button>
-      <span class="text-[12.5px]" id="c-msg"></span>
+      <span class="small" id="c-msg"></span>
     </div>
   </div>`;
 
-  const MSG = { bad: "text-[12.5px] text-bad", ok: "text-[12.5px] text-good", "": "text-[12.5px]" };
+  const MSG = { bad: "small text-bad", ok: "small text-good", "": "small" };
   $("#c-save").onclick = async () => {
     const body = {
       interval: $("#c-interval").value,
@@ -540,17 +544,15 @@ function renderConfig() {
 function renderRules() {
   dropGrid();
   const c = STATE.config || {};
-  const H3 = "text-sm font-semibold mt-4 mb-1.5 first:mt-0";
-  $("#view").innerHTML = `<div class="${CARD} px-[18px] py-4 text-[13px] leading-[1.7]
-      [&_ul]:m-0 [&_ul]:pl-[18px] [&_ul]:list-disc
-      [&_code]:bg-s2 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded">
-    <h3 class="${H3}">이 전략이 노리는 것</h3>
+  const H3 = "fs-6 fw-semibold mt-3 mb-2";
+  $("#view").innerHTML = `<div class="${CARD} card-body small" style="line-height:1.7">
+    <h3 class="${H3} mt-0">이 전략이 노리는 것</h3>
     <p>주가가 뚜렷한 추세 없이 박스권을 오갈 때, 볼린저 밴드 <b>하한선까지 밀린 과매도</b>에서 사고
       <b>상한선까지 오른 과매수</b>에서 파는 평균 회귀(mean reversion) 전략입니다.
       추세장에서는 불리하므로 강제 손절이 안전판 역할을 합니다.</p>
 
     <h3 class="${H3}">매수 진입</h3>
-    <ul>
+    <ul class="mb-0">
       <li>현재가 ≤ 하한선 (중앙선 − ${c.bb_stddev}σ, ${c.bb_period}봉)</li>
       <li>그리고 RSI(${c.rsi_period}) ≤ ${c.rsi_buy} — 과매도 확인</li>
       <li>→ 예수금의 ${(c.cash_ratio * 100).toFixed(0)}% 로 <b>지정가 매수</b>
@@ -559,7 +561,7 @@ function renderRules() {
     </ul>
 
     <h3 class="${H3}">매도 청산</h3>
-    <ul>
+    <ul class="mb-0">
       <li>현재가 ≥ 상한선 <b>그리고</b> RSI ≥ ${c.rsi_sell} → 보유 <b>전량</b> 시장가 매도</li>
       <li>${c.mid_take_profit
         ? `보유 중 중앙선(${c.bb_period}봉 이평) 도달 시 <b>${(c.mid_take_ratio * 100).toFixed(0)}% 부분 익절</b> (매수가 위일 때만, 1회 한정)`
@@ -567,13 +569,13 @@ function renderRules() {
       <li>매수가 대비 <b>−${(c.stop_loss_pct * 100).toFixed(1)}%</b> 이탈 시 조건 불문 전량 시장가 매도</li>
     </ul>
 
-    <div class="tint-warn border border-warn rounded-[10px] px-3.5 py-2.5 my-3">
+    <div class="tint-warn border border-warn rounded-3 px-3 py-2 my-3">
       <b>판정 우선순위는 손절 → 청산 → 부분익절 → 진입</b> 순입니다.
       하한선을 타고 계속 밀리는 ‘밴드 라이딩’ 구간에서는 매수 조건이 계속 참이라,
       손절을 먼저 보지 않으면 물타기로 빠져듭니다.</div>
 
     <h3 class="${H3}">안전장치</h3>
-    <ul>
+    <ul class="mb-0">
       <li>기본은 <b>모의(dry-run)</b> — 실주문은 서버 <code>TOSS_TRADING_ENABLED</code>,
         설정의 ‘실주문 허용’, 이 화면의 <b>실주문 전환</b> 이 <b>모두</b> 켜져야 나갑니다.</li>
       <li>정규장(09:00~15:30) 밖에서는 판정만 하고 주문하지 않습니다.</li>
@@ -585,7 +587,7 @@ function renderRules() {
     </ul>
 
     <h3 class="${H3}">한계</h3>
-    <ul>
+    <ul class="mb-0">
       <li>추세가 강한 구간에서는 밴드를 타고 계속 밀리므로 손절이 반복될 수 있습니다.</li>
       <li>매수는 지정가(현재가 근처 상한)라 슬리피지를 제한하지만, <b>급락 중엔 미체결로 진입을 놓칠</b> 수 있습니다. 매도(손절·익절)는 확실한 청산을 위해 시장가입니다.</li>
       <li>세력추정매매와 달리 이 전략은 <b>이 저장소에서 백테스트로 검증된 수치가 없습니다</b> —
@@ -600,34 +602,33 @@ async function selectSymbol(symbol) {
   SELECTED = symbol;
   repaintRows();
   const d = $("#detail");
-  d.innerHTML = `<div class="mt-3.5">${EMPTY("차트 불러오는 중…")}</div>`;
+  d.innerHTML = `<div>${EMPTY("차트 불러오는 중…")}</div>`;
   let data;
   try {
     const r = await fetch(`/api/bollinger/chart/${symbol}?count=120`);
     data = await r.json();
     if (!r.ok) throw new Error(data.detail || "조회 실패");
   } catch (e) {
-    d.innerHTML = `<div class="mt-3.5">${EMPTY(`차트를 불러오지 못했습니다 — ${e.message || e}`)}</div>`;
+    d.innerHTML = `<div>${EMPTY(`차트를 불러오지 못했습니다 — ${e.message || e}`)}</div>`;
     return;
   }
   const dec = (STATE.decisions || []).find(x => x["종목코드"] === symbol) || {};
   const swatch = (color, extra = "") =>
-    `<i class="inline-block w-2.5 h-2.5 rounded-sm mr-1.5 -mb-px ${extra}" style="background:${color}"></i>`;
-  d.innerHTML = `<div class="mt-3.5 ${CARD} px-4 py-3.5">
-    <div class="flex flex-wrap gap-3 items-center mb-2.5">
-      <h2 class="m-0 text-[17px] font-semibold">${dec["종목명"] || symbol}
-        <span class="text-txt3 font-normal text-[13px] ml-2 tabular-nums">${symbol} · ${data.interval}봉</span></h2>
-      <div class="flex-1"></div>
-      <a class="text-xs px-2.5 py-1 rounded-lg border border-line bg-s2 text-txt2 no-underline
-                hover:border-accent hover:text-accent"
+    `<i class="d-inline-block rounded-1 me-1" style="width:10px;height:10px;background:${color};${extra}"></i>`;
+  d.innerHTML = `<div class="${CARD} card-body">
+    <div class="d-flex flex-wrap gap-3 align-items-center mb-2">
+      <h2 class="m-0 fs-5 fw-semibold">${dec["종목명"] || symbol}
+        <span class="text-body-tertiary fw-normal small ms-2 tnum">${symbol} · ${data.interval}봉</span></h2>
+      <div class="flex-grow-1"></div>
+      <a class="btn btn-sm btn-outline-secondary"
          href="${tossUrl(symbol)}" target="_blank" rel="noopener noreferrer">토스증권에서 열기 ↗</a>
     </div>
-    <div class="w-full" id="chart-box"></div>
-    <div class="flex flex-wrap gap-3.5 text-xs text-txt2 mt-2">
+    <div class="w-100" id="chart-box"></div>
+    <div class="d-flex flex-wrap gap-3 small text-body-secondary mt-2">
       <span>${swatch("var(--up)")}양봉(상승)</span>
       <span>${swatch("var(--down)")}음봉(하락)</span>
-      <span>${swatch("var(--accent)", "!h-0.5 !rounded-none")}볼린저 밴드 / 중앙선</span>
-      <span>${swatch("var(--text-muted)", "!h-0.5 !rounded-none")}RSI ${STATE.config.rsi_buy} / ${STATE.config.rsi_sell} 기준선</span>
+      <span>${swatch("var(--accent)", "height:2px;border-radius:0")}볼린저 밴드 / 중앙선</span>
+      <span>${swatch("var(--text-muted)", "height:2px;border-radius:0")}RSI ${STATE.config.rsi_buy} / ${STATE.config.rsi_sell} 기준선</span>
     </div>
   </div>`;
   drawChart(data.bars);
@@ -730,54 +731,60 @@ $("#run-btn").onclick = async () => {
 /* ------------------------------------------------- 종목 추가 모달 */
 /* 감시 목록 편집은 전략 설정 폼에서 떼어내 이 창으로 모았다. 추가는 서버에서 합치는
    /symbols 를 쓰고(다른 설정을 덮어쓰지 않는다), 삭제는 목록 전체를 /config 로 보낸다. */
-const ADD_MODAL = `<div class="${UI.cls.modalBack}" id="add-modal" hidden role="dialog" aria-modal="true" aria-labelledby="add-title">
-  <div class="${UI.cls.modal}">
-    <h2 class="text-base font-semibold m-0 mb-1" id="add-title">감시 종목 추가</h2>
-    <p class="text-[12.5px] text-txt3 mt-0 mb-3.5">국내 주식 6자리 코드만 지원합니다.
-      쉼표나 공백으로 여러 개를 한 번에 넣을 수 있습니다. 종목이 많을수록 한 주기가 길어집니다.</p>
+const ADD_MODAL = `<div class="modal fade" id="add-modal" tabindex="-1" aria-labelledby="add-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 class="modal-title fs-6 fw-semibold" id="add-title">감시 종목 추가</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-body-tertiary mb-3">국내 주식 6자리 코드만 지원합니다.
+          쉼표나 공백으로 여러 개를 한 번에 넣을 수 있습니다. 종목이 많을수록 한 주기가 길어집니다.</p>
 
-    <label class="${UI.cls.label}" for="a-symbols">종목코드</label>
-    <div class="flex gap-2">
-      <input class="${UI.cls.input}" type="text" id="a-symbols" autocomplete="off" spellcheck="false"
-             placeholder="005930, 000660">
-      <button class="${UI.cls.btnPrimary} shrink-0" id="a-add" type="button">추가</button>
-    </div>
-    <div class="text-[12.5px] mt-2.5" id="a-msg"></div>
+        <label class="${UI.cls.label}" for="a-symbols">종목코드</label>
+        <div class="d-flex gap-2">
+          <input class="${UI.cls.input}" type="text" id="a-symbols" autocomplete="off" spellcheck="false"
+                 placeholder="005930, 000660">
+          <button class="${UI.cls.btnPrimary} flex-shrink-0" id="a-add" type="button">추가</button>
+        </div>
+        <div class="small mt-2" id="a-msg"></div>
 
-    <fieldset class="${UI.cls.fieldset} mt-3.5 mb-0">
-      <legend class="${UI.cls.legend}">현재 감시 목록</legend>
-      <div class="flex flex-wrap gap-1.5" id="a-list"></div>
-    </fieldset>
-
-    <div class="flex justify-end mt-3.5">
-      <button class="${UI.cls.btn}" id="a-close" type="button">닫기</button>
+        <fieldset class="${UI.cls.fieldset} mt-3 mb-0">
+          <legend class="${UI.cls.legend}">현재 감시 목록</legend>
+          <div class="d-flex flex-wrap gap-2" id="a-list"></div>
+        </fieldset>
+      </div>
+      <div class="modal-footer">
+        <button class="${UI.cls.btn}" id="a-close" type="button" data-bs-dismiss="modal">닫기</button>
+      </div>
     </div>
   </div>
 </div>`;
 document.body.insertAdjacentHTML("beforeend", ADD_MODAL);
 
-const A_MSG = { bad: "text-[12.5px] mt-2.5 text-bad", ok: "text-[12.5px] mt-2.5 text-good", "": "text-[12.5px] mt-2.5" };
+const A_MSG = { bad: "small mt-2 text-bad", ok: "small mt-2 text-good", "": "small mt-2" };
 const addMsg = (kind, text) => { const m = $("#a-msg"); m.className = A_MSG[kind]; m.innerHTML = text; };
 
 function renderAddList() {
   const syms = (STATE && STATE.config && STATE.config.symbols) || [];
   $("#a-list").innerHTML = syms.length
-    ? syms.map(sym => `<span class="inline-flex items-center gap-1.5 text-[12.5px] tabular-nums
-         bg-s2 border border-line rounded-full pl-2.5 pr-1 py-0.5">${sym}
-         <button class="border-0 bg-transparent text-txt3 hover:text-bad cursor-pointer px-1 leading-none"
+    ? syms.map(sym => `<span class="d-inline-flex align-items-center gap-1 small tnum
+         bg-s2 border border-line rounded-pill ps-2 pe-1 py-1">${sym}
+         <button class="btn btn-link btn-sm p-0 px-1 text-body-tertiary text-decoration-none lh-1"
            data-del="${sym}" type="button" aria-label="${sym} 제거">×</button></span>`).join("")
-    : `<span class="text-[12.5px] text-txt3">아직 없습니다.</span>`;
+    : `<span class="small text-body-tertiary">아직 없습니다.</span>`;
   $("#a-list").querySelectorAll("[data-del]").forEach(b => { b.onclick = () => removeSymbol(b.dataset.del); });
 }
 
+const addModal = () => bootstrap.Modal.getOrCreateInstance($("#add-modal"));
 function openAddModal() {
-  $("#add-modal").hidden = false;
+  addModal().show();
   addMsg("", "");
   $("#a-symbols").value = "";
   renderAddList();
-  $("#a-symbols").focus();
 }
-const closeAddModal = () => { $("#add-modal").hidden = true; };
+$("#add-modal").addEventListener("shown.bs.modal", () => $("#a-symbols").focus());
 
 async function addSymbols() {
   const codes = [...new Set(($("#a-symbols").value.match(/\d{6}/g) || []))];
@@ -852,10 +859,7 @@ function burstRefresh() {
 
 $("#add-btn").onclick = openAddModal;
 $("#a-add").onclick = addSymbols;
-$("#a-close").onclick = closeAddModal;
 $("#a-symbols").onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); addSymbols(); } };
-$("#add-modal").onclick = (e) => { if (e.target.id === "add-modal") closeAddModal(); };
-document.addEventListener("keydown", (e) => { if (e.key === "Escape" && !$("#add-modal").hidden) closeAddModal(); });
 
 document.addEventListener("sessionchange", () => { SELECTED = null; $("#detail").innerHTML = ""; refresh(); });
 document.addEventListener("themechange", () => { if (SELECTED) selectSymbol(SELECTED); });

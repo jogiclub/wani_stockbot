@@ -20,151 +20,157 @@
      - (선택) 안내 바: <div id="setup" class="setup-bar" hidden></div> */
 (function () {
   const c = UI.cls;
-  const H2 = "m-0 mb-1 text-[17px] font-semibold";
-  const SUB = "m-0 mb-3.5 text-[12.5px] text-txt3";
-  const ROW = "grid grid-cols-1 sm:grid-cols-2 gap-2.5";
-  const CHECK = "flex items-center gap-2 text-[13px] mt-2.5";
-  const ACT = "flex items-center gap-2.5 flex-wrap mt-2";
-  const MSG = "text-[12.5px] mt-2.5";
-  const SETUP_BAR = "tint-accent border border-accent px-3.5 py-3 rounded-[10px] mb-3.5 " +
-                    "text-[13px] flex flex-wrap gap-2.5 items-center";
-  const KEYS_HTML = `<div class="${c.modalBack}" id="keys-modal" hidden role="dialog" aria-modal="true" aria-labelledby="keys-title">
-  <div class="${c.modal}">
-    <h2 id="keys-title" class="${H2}">내 토스증권 API 키</h2>
-    <p class="${SUB}">로그인 계정에 저장되며 <b>secret 은 암호화</b>해 보관합니다.
-      서버를 재시작해도 다시 입력할 필요가 없습니다. 키는 <a class="text-accent underline" href="https://developers.tossinvest.com" target="_blank"
-      rel="noopener noreferrer">developers.tossinvest.com</a> 에서 발급하고,
-      접속 서버 IP 를 허용 IP 로 등록해야 합니다.</p>
+  const MSG = "small mt-2";
+  const SETUP_BAR = "tint-accent border border-accent px-3 py-2 rounded-3 mb-3 " +
+                    "small d-flex flex-wrap gap-2 align-items-center";
+  const CHECK = "form-check mt-2";
+  const HEAD = (id, title) => `<div class="modal-header">
+        <h2 id="${id}" class="modal-title fs-5 fw-semibold">${title}</h2>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="닫기"></button>
+      </div>`;
+  const KEYS_HTML = `<div class="modal fade" id="keys-modal" tabindex="-1" aria-labelledby="keys-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-content">
+      ${HEAD("keys-title", "내 토스증권 API 키")}
+      <div class="modal-body">
+        <p class="small text-body-tertiary">로그인 계정에 저장되며 <b>secret 은 암호화</b>해 보관합니다.
+          서버를 재시작해도 다시 입력할 필요가 없습니다. 키는 <a class="text-accent" href="https://developers.tossinvest.com" target="_blank"
+          rel="noopener noreferrer">developers.tossinvest.com</a> 에서 발급하고,
+          접속 서버 IP 를 허용 IP 로 등록해야 합니다.</p>
 
-    <fieldset class="${c.fieldset}">
-      <legend class="${c.legend}">자격증명</legend>
-      <div class="mb-2.5">
-        <label class="${c.label}" for="f-id">Client ID</label>
-        <input class="${c.input}" type="text" id="f-id" autocomplete="off" spellcheck="false" placeholder="tsck_live_…">
+        <fieldset class="${c.fieldset}">
+          <legend class="${c.legend}">자격증명</legend>
+          <div class="mb-2">
+            <label class="${c.label}" for="f-id">Client ID</label>
+            <input class="${c.input}" type="text" id="f-id" autocomplete="off" spellcheck="false" placeholder="tsck_live_…">
+          </div>
+          <div class="mb-2">
+            <label class="${c.label}" for="f-secret">Client Secret</label>
+            <input class="${c.input}" type="password" id="f-secret" autocomplete="new-password" placeholder="tssk_live_…">
+            <div class="${c.hint}">저장 시 실제 API 를 한 번 호출해 키가 유효한지 확인합니다.
+              스캔·알림·주문 설정은 <b>⚙ 설정</b> 창에 있으며 그대로 유지됩니다.</div>
+          </div>
+        </fieldset>
+        <div class="${MSG}" id="f-msg"></div>
       </div>
-      <div class="mb-2.5">
-        <label class="${c.label}" for="f-secret">Client Secret</label>
-        <input class="${c.input}" type="password" id="f-secret" autocomplete="new-password" placeholder="tssk_live_…">
-        <div class="${c.hint}">저장 시 실제 API 를 한 번 호출해 키가 유효한지 확인합니다.
-          스캔·알림·주문 설정은 <b>⚙ 설정</b> 창에 있으며 그대로 유지됩니다.</div>
+      <div class="modal-footer justify-content-start">
+        <button class="${c.btnPrimary}" id="f-save">저장하고 시작</button>
+        <button class="${c.btn}" id="f-close" data-bs-dismiss="modal">닫기</button>
+        <div class="flex-grow-1"></div>
+        <button class="${c.btnDanger}" id="f-clear" hidden>연결 해제</button>
       </div>
-    </fieldset>
-
-    <div class="flex flex-wrap gap-2 items-center mt-3.5">
-      <button class="${c.btnPrimary}" id="f-save">저장하고 시작</button>
-      <button class="${c.btn}" id="f-close">닫기</button>
-      <div class="flex-1"></div>
-      <button class="${c.btnDanger}" id="f-clear" hidden>연결 해제</button>
     </div>
-    <div class="${MSG}" id="f-msg"></div>
   </div>
 </div>`;
 
-  const PREFS_HTML = `<div class="${c.modalBack}" id="modal" hidden role="dialog" aria-modal="true" aria-labelledby="modal-title">
-  <div class="${c.modal}">
-    <h2 id="modal-title" class="${H2}">설정</h2>
-    <p class="${SUB}">저장하면 개인 스캔이 새 설정으로 다시 시작됩니다
-      (실행 중이던 볼린저 봇은 멈추므로 다시 시작해야 합니다).
-      API 키는 <b>🔑 내 API 키</b> 창에서 바꿉니다.</p>
+  const PREFS_HTML = `<div class="modal fade" id="modal" tabindex="-1" aria-labelledby="modal-title" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-scrollable modal-lg">
+    <div class="modal-content">
+      ${HEAD("modal-title", "설정")}
+      <div class="modal-body">
+        <p class="small text-body-tertiary">저장하면 개인 스캔이 새 설정으로 다시 시작됩니다
+          (실행 중이던 볼린저 봇은 멈추므로 다시 시작해야 합니다).
+          API 키는 <b>🔑 내 API 키</b> 창에서 바꿉니다.</p>
 
-    <fieldset class="${c.fieldset}">
-      <legend class="${c.legend}">스캔 범위</legend>
-      <div class="${ROW}">
-        <div class="mb-2.5">
-          <label class="${c.label}" for="f-top">거래대금 상위 N종목</label>
-          <input class="${c.input}" type="number" id="f-top" min="0" max="1000" step="10">
-          <div class="${c.hint}">0 이면 전체 유니버스 (느립니다)</div>
-        </div>
-        <div class="mb-2.5">
-          <label class="${c.label}" for="f-interval">스캔 주기(초)</label>
-          <input class="${c.input}" type="number" id="f-interval" min="30" max="3600" step="30">
-          <div class="${c.hint}">30~3600초</div>
-        </div>
-      </div>
-      <div class="${CHECK}">
-        <input class="w-4 h-4" type="checkbox" id="f-live"><label for="f-live" style="margin:0">장중 실시간 현재가로 돌파 판정</label>
-      </div>
-    </fieldset>
+        <fieldset class="${c.fieldset}">
+          <legend class="${c.legend}">스캔 범위</legend>
+          <div class="row g-2">
+            <div class="col-12 col-sm-6">
+              <label class="${c.label}" for="f-top">거래대금 상위 N종목</label>
+              <input class="${c.input}" type="number" id="f-top" min="0" max="1000" step="10">
+              <div class="${c.hint}">0 이면 전체 유니버스 (느립니다)</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="${c.label}" for="f-interval">스캔 주기(초)</label>
+              <input class="${c.input}" type="number" id="f-interval" min="30" max="3600" step="30">
+              <div class="${c.hint}">30~3600초</div>
+            </div>
+          </div>
+          <div class="${CHECK}">
+            <input class="form-check-input" type="checkbox" id="f-live"><label class="form-check-label small" for="f-live">장중 실시간 현재가로 돌파 판정</label>
+          </div>
+        </fieldset>
 
-    <fieldset class="${c.fieldset}">
-      <legend class="${c.legend}">텔레그램 알림 (선택)</legend>
-      <div class="${ROW}">
-        <div class="mb-2.5">
-          <label class="${c.label}" for="f-tg-token">Bot Token</label>
-          <input class="${c.input}" type="password" id="f-tg-token" autocomplete="off" placeholder="123456789:AA…">
-          <div class="${c.hint}">BotFather 가 준 문자열 <b>전체</b> (콜론 포함).
-            비워 두면 저장값을 그대로 씁니다.</div>
-        </div>
-        <div class="mb-2.5">
-          <label class="${c.label}" for="f-tg-chat">Chat ID</label>
-          <input class="${c.input}" type="text" id="f-tg-chat" autocomplete="off" placeholder="123456789">
-          <div class="${c.hint}">대화방 <b>숫자</b> ID. 토큰의 일부가 아닙니다.</div>
-        </div>
-      </div>
-      <div class="${ACT}">
-        <button class="${c.btn} !text-[12.5px] !px-2.5 !py-1.5" id="f-tg-test">테스트 전송</button>
-        <span class="text-[11.5px] text-txt3" id="f-tg-note">봇에게 먼저 아무 메시지나 보낸 뒤 눌러보세요.</span>
-      </div>
-    </fieldset>
+        <fieldset class="${c.fieldset}">
+          <legend class="${c.legend}">텔레그램 알림 (선택)</legend>
+          <div class="row g-2">
+            <div class="col-12 col-sm-6">
+              <label class="${c.label}" for="f-tg-token">Bot Token</label>
+              <input class="${c.input}" type="password" id="f-tg-token" autocomplete="off" placeholder="123456789:AA…">
+              <div class="${c.hint}">BotFather 가 준 문자열 <b>전체</b> (콜론 포함).
+                비워 두면 저장값을 그대로 씁니다.</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="${c.label}" for="f-tg-chat">Chat ID</label>
+              <input class="${c.input}" type="text" id="f-tg-chat" autocomplete="off" placeholder="123456789">
+              <div class="${c.hint}">대화방 <b>숫자</b> ID. 토큰의 일부가 아닙니다.</div>
+            </div>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+            <button class="${c.btn}" id="f-tg-test">테스트 전송</button>
+            <span class="small text-body-tertiary" id="f-tg-note">봇에게 먼저 아무 메시지나 보낸 뒤 눌러보세요.</span>
+          </div>
+        </fieldset>
 
-    <fieldset id="f-email-set" class="${c.fieldset}">
-      <legend class="${c.legend}">이메일 알림 (선택)</legend>
-      <div class="mb-2.5">
-        <label class="${c.label}" for="f-emails">받는 사람 이메일 — 세력추정매매 새 시그널</label>
-        <textarea class="${c.input} !h-20 resize-y" id="f-emails" autocomplete="off"
-          placeholder="여러 개면 콤마·줄바꿈으로 구분 (예: a@a.com, b@b.com)"></textarea>
-        <div class="${c.hint}" id="f-email-hint">비워 두면 이메일을 보내지 않습니다.</div>
-      </div>
-      <div class="${ACT}">
-        <button class="${c.btn} !text-[12.5px] !px-2.5 !py-1.5" id="f-em-test">테스트 전송</button>
-        <span class="text-[11.5px] text-txt3" id="f-em-note"></span>
-      </div>
-    </fieldset>
+        <fieldset id="f-email-set" class="${c.fieldset}">
+          <legend class="${c.legend}">이메일 알림 (선택)</legend>
+          <div class="mb-2">
+            <label class="${c.label}" for="f-emails">받는 사람 이메일 — 세력추정매매 새 시그널</label>
+            <textarea class="${c.input}" style="height:80px;resize:vertical" id="f-emails" autocomplete="off"
+              placeholder="여러 개면 콤마·줄바꿈으로 구분 (예: a@a.com, b@b.com)"></textarea>
+            <div class="${c.hint}" id="f-email-hint">비워 두면 이메일을 보내지 않습니다.</div>
+          </div>
+          <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+            <button class="${c.btn}" id="f-em-test">테스트 전송</button>
+            <span class="small text-body-tertiary" id="f-em-note"></span>
+          </div>
+        </fieldset>
 
-    <fieldset id="f-trade-set" class="${c.fieldset}">
-      <legend class="${c.legend}">주문 (선택)</legend>
-      <div class="${ROW}">
-        <div class="mb-2.5">
-          <label class="${c.label}" for="f-account">계좌 번호(accountSeq)</label>
-          <input class="${c.input}" type="number" id="f-account" min="0" step="1">
-          <div class="${c.hint}">비우면 첫 번째 계좌</div>
-        </div>
-        <div class="mb-2.5">
-          <label class="${c.label}" for="f-max">1회 주문 한도(원)</label>
-          <input class="${c.input}" type="number" id="f-max" min="0" step="100000">
-          <div class="${c.hint}" id="f-max-hint"></div>
-        </div>
+        <fieldset id="f-trade-set" class="${c.fieldset}">
+          <legend class="${c.legend}">주문 (선택)</legend>
+          <div class="row g-2">
+            <div class="col-12 col-sm-6">
+              <label class="${c.label}" for="f-account">계좌 번호(accountSeq)</label>
+              <input class="${c.input}" type="number" id="f-account" min="0" step="1">
+              <div class="${c.hint}">비우면 첫 번째 계좌</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="${c.label}" for="f-max">1회 주문 한도(원)</label>
+              <input class="${c.input}" type="number" id="f-max" min="0" step="100000">
+              <div class="${c.hint}" id="f-max-hint"></div>
+            </div>
+          </div>
+          <div class="${CHECK}" id="f-optin-row" hidden>
+            <input class="form-check-input" type="checkbox" id="f-optin">
+            <label class="form-check-label small" for="f-optin">⚠ 실주문 허용 (끄면 모의 주문만)</label>
+          </div>
+          <div class="${CHECK}">
+            <input class="form-check-input" type="checkbox" id="f-auto">
+            <label class="form-check-label small" for="f-auto">세력추정매매 시그널 자동 매수</label>
+          </div>
+          <div class="row g-2 mt-1">
+            <div class="col-12 col-sm-6">
+              <label class="${c.label}" for="f-auto-score">점수 이상은 토스 자동매수</label>
+              <input class="${c.input}" type="number" id="f-auto-score" min="0" max="100" step="1" placeholder="75">
+              <div class="${c.hint}">실측 컷오프 75점 (그 아래는 승률 50% 안팎)</div>
+            </div>
+            <div class="col-12 col-sm-6">
+              <label class="${c.label}" for="f-auto-amount">1종목 매수 금액(원)</label>
+              <input class="${c.input}" type="number" id="f-auto-amount" min="0" step="100000" placeholder="500000">
+              <div class="${c.hint}">이 금액 안에서 최대 수량 (1회 한도·예수금도 넘지 않음)</div>
+            </div>
+          </div>
+          <div class="${c.hint} mt-2" id="f-auto-hint">장중(09:00~15:20) 스캔에서 조건을 넘은 종목을 하루 1회,
+            매수가(전일 고가) 지정가로 주문하고 체결되면 1R 익절·손절 OCO 를 겁니다.
+            장 마감까지 미체결이면 취소합니다. 실주문 허용이 꺼져 있으면 모의로만 기록됩니다.</div>
+        </fieldset>
+        <div class="${MSG}" id="p-msg"></div>
       </div>
-      <div class="${CHECK}" id="f-optin-row" hidden>
-        <input class="w-4 h-4" type="checkbox" id="f-optin">
-        <label for="f-optin" style="margin:0">⚠ 실주문 허용 (끄면 모의 주문만)</label>
+      <div class="modal-footer justify-content-start">
+        <button class="${c.btnPrimary}" id="p-save">저장</button>
+        <button class="${c.btn}" id="p-close" data-bs-dismiss="modal">닫기</button>
       </div>
-      <div class="${CHECK}">
-        <input class="w-4 h-4" type="checkbox" id="f-auto">
-        <label for="f-auto" style="margin:0">세력추정매매 시그널 자동 매수</label>
-      </div>
-      <div class="${ROW}">
-        <div class="mb-2.5">
-          <label class="${c.label}" for="f-auto-score">점수 이상은 토스 자동매수</label>
-          <input class="${c.input}" type="number" id="f-auto-score" min="0" max="100" step="1" placeholder="75">
-          <div class="${c.hint}">실측 컷오프 75점 (그 아래는 승률 50% 안팎)</div>
-        </div>
-        <div class="mb-2.5">
-          <label class="${c.label}" for="f-auto-amount">1종목 매수 금액(원)</label>
-          <input class="${c.input}" type="number" id="f-auto-amount" min="0" step="100000" placeholder="500000">
-          <div class="${c.hint}">이 금액 안에서 최대 수량 (1회 한도·예수금도 넘지 않음)</div>
-        </div>
-      </div>
-      <div class="${c.hint}" id="f-auto-hint">장중(09:00~15:20) 스캔에서 조건을 넘은 종목을 하루 1회,
-        매수가(전일 고가) 지정가로 주문하고 체결되면 1R 익절·손절 OCO 를 겁니다.
-        장 마감까지 미체결이면 취소합니다. 실주문 허용이 꺼져 있으면 모의로만 기록됩니다.</div>
-    </fieldset>
-
-    <div class="flex flex-wrap gap-2 items-center mt-3.5">
-      <button class="${c.btnPrimary}" id="p-save">저장</button>
-      <button class="${c.btn}" id="p-close">닫기</button>
     </div>
-    <div class="${MSG}" id="p-msg"></div>
   </div>
 </div>`;
 
@@ -244,9 +250,9 @@
 
   function openKeys() {
     if (!keysModal) return;
-    keysModal.hidden = false;
+    keysModal.show();
     msg("");
-    setTimeout(() => $("#f-id").focus(), 30);
+    setTimeout(() => $("#f-id").focus(), 300);
   }
   function openPrefs() {
     if (!prefsModal) return;
@@ -256,23 +262,23 @@
       msg("먼저 API 키를 등록하세요. 설정은 그 다음에 저장할 수 있습니다.");
       return;
     }
-    prefsModal.hidden = false;
+    prefsModal.show();
     pmsg("");
   }
-  const closeKeys = () => { if (keysModal) keysModal.hidden = true; };
-  const closePrefs = () => { if (prefsModal) prefsModal.hidden = true; };
+  const closeKeys = () => { if (keysModal) keysModal.hide(); };
+  const closePrefs = () => { if (prefsModal) prefsModal.hide(); };
 
-  const TONE = { bad: "text-bad", ok: "text-good", "": "text-txt2" };
+  const TONE = { bad: "text-bad", ok: "text-good", "": "text-body-secondary" };
 
   function msg(text, kind = "") { note("#f-msg", MSG, text, kind); }
   function pmsg(text, kind = "") { note("#p-msg", MSG, text, kind); }
-  function tgNote(text, kind = "") { note("#f-tg-note", "text-[11.5px]", text, kind); }
-  function emNote(text, kind = "") { note("#f-em-note", "text-[11.5px]", text, kind); }
+  function tgNote(text, kind = "") { note("#f-tg-note", "small", text, kind); }
+  function emNote(text, kind = "") { note("#f-em-note", "small", text, kind); }
 
   function note(sel, base, text, kind) {
     const el = $(sel);
     if (!el) return;
-    el.className = `${base} ${TONE[kind] || (base.includes("11.5") ? "text-txt3" : TONE[""])}`;
+    el.className = `${base} ${TONE[kind] || (base === MSG ? TONE[""] : "text-body-tertiary")}`;
     el.textContent = text;
   }
 
@@ -404,18 +410,9 @@
       holder.innerHTML = html;
       document.body.appendChild(holder.firstElementChild);
     });
-    keysModal = $("#keys-modal");
-    prefsModal = $("#modal");
-
-    $("#f-close").onclick = closeKeys;
-    $("#p-close").onclick = closePrefs;
-    keysModal.addEventListener("click", ev => { if (ev.target === keysModal) closeKeys(); });
-    prefsModal.addEventListener("click", ev => { if (ev.target === prefsModal) closePrefs(); });
-    document.addEventListener("keydown", ev => {
-      if (ev.key !== "Escape") return;
-      closeKeys();
-      closePrefs();
-    });
+    // Bootstrap 번들은 body 끝에서 로드되지만 DOMContentLoaded 시점엔 이미 실행돼 있다.
+    keysModal = bootstrap.Modal.getOrCreateInstance($("#keys-modal"));
+    prefsModal = bootstrap.Modal.getOrCreateInstance($("#modal"));
 
     // 페이지에는 ⚙ 버튼만 있다. 🔑 버튼은 그 옆에 만들어 넣는다
     // (GNB 가 [data-gnb-action] 을 오른쪽으로 모으므로 같은 속성을 준다).

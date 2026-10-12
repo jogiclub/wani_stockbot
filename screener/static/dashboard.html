@@ -4,73 +4,86 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>세력 추정 매매법 스크리너 · 왔니 주식</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="/static/ui.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="/static/common.css">
 <script src="/static/gnb.js"></script>
-<script src="/static/offcanvas.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+<script src="/static/ui.js"></script>
 <script src="/static/session.js"></script>
+<script src="/static/offcanvas.js"></script>
 <script src="/static/stockmenu.js"></script>
+<style>
+  /* 가이드 탭의 표·본문 (Bootstrap 에 없는 정렬 규칙만) */
+  .gtbl { --bs-table-bg: transparent; }
+  .gtbl th, .gtbl td { text-align: right; }
+  .gtbl th:first-child, .gtbl td:first-child, .gtbl .tl { text-align: left; }
+  .guide { line-height: 1.75; }
+  .guide p { margin-bottom: .6rem; color: var(--text-secondary); }
+  .guide code { background: var(--surface-2); padding: .1rem .4rem; border-radius: .25rem; }
+  .guide ul { padding-left: 1.25rem; }
+  .guide li { margin-bottom: .25rem; }
+  .guide > h3:first-child { margin-top: 0 !important; }
+</style>
 </head>
-<body class="font-sans text-sm leading-normal antialiased">
+<body>
 <div data-gnb="screener"></div>
 
 <!-- GNB 우측으로 옮겨질 공통 컨트롤 (gnb.js 가 이동시킨다) -->
-<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
-             bg-s2 text-txt2 border border-line" id="status" data-gnb-action>
-  <span class="w-[7px] h-[7px] rounded-full bg-txt3" id="status-dot"></span>
+<span class="badge rounded-pill d-inline-flex align-items-center gap-1 bg-s2 text-body-secondary border border-line fw-semibold" id="status" data-gnb-action>
+  <span class="d-inline-block rounded-circle bg-secondary" style="width:7px;height:7px" id="status-dot"></span>
   <span id="status-text">연결 중…</span></span>
 <button data-settings-btn data-gnb-action hidden>⚙ 설정</button>
 
-<div class="max-w-page mx-auto px-5 pt-5 pb-14">
-  <div class="flex flex-wrap gap-3 items-center mb-4">
-    <h1 class="m-0 text-[19px] font-semibold tracking-tight">세력 추정 매매법 스크리너
-      <span class="text-txt3 font-normal text-[13px] ml-2" id="mode-label"></span></h1>
-    <div class="flex-1"></div>
-    <button class="font-sans text-sm rounded-lg border border-transparent bg-accent text-white font-semibold px-3.5 py-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" id="scan-btn">지금 스캔</button>
+<div class="page-wrap mx-auto px-3 pt-4 pb-5">
+  <div class="d-flex flex-wrap gap-3 align-items-center mb-3">
+    <h1 class="m-0 fs-4 fw-semibold">세력 추정 매매법 스크리너
+      <span class="text-body-tertiary fw-normal small ms-2" id="mode-label"></span></h1>
+    <div class="flex-grow-1"></div>
+    <button class="btn btn-sm btn-primary fw-semibold" id="scan-btn">지금 스캔</button>
   </div>
 
   <div id="setup" hidden></div>
-  <div id="err" class="tint-bad border border-bad px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
-  <div id="blocked" class="tint-warn border border-warn px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
+  <div id="err" class="alert tint-bad border border-bad py-2 px-3 mb-3 small" hidden></div>
+  <div id="blocked" class="alert tint-warn border border-warn py-2 px-3 mb-3 small" hidden></div>
   <div id="regime" hidden></div>
 
-  <section class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5 mb-4" aria-label="요약">
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">매수 시그널</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-signals">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">돌파 대기</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-watch">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">판정 종목</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-scanned">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">필터 제외</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-skipped">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">마지막 스캔</div>
-      <div class="text-[17px] font-semibold tabular-nums" id="t-last">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">다음 스캔</div>
-      <div class="text-[17px] font-semibold tabular-nums" id="t-next">–</div></div>
+  <section class="row g-2 mb-3" aria-label="요약">
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">매수 시그널</div>
+      <div class="fs-3 fw-semibold tnum" id="t-signals">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">돌파 대기</div>
+      <div class="fs-3 fw-semibold tnum" id="t-watch">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">판정 종목</div>
+      <div class="fs-3 fw-semibold tnum" id="t-scanned">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">필터 제외</div>
+      <div class="fs-3 fw-semibold tnum" id="t-skipped">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">마지막 스캔</div>
+      <div class="fs-5 fw-semibold tnum" id="t-last">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">다음 스캔</div>
+      <div class="fs-5 fw-semibold tnum" id="t-next">–</div></div></div>
   </section>
 
-  <div class="flex gap-1 border-b border-line mb-3.5" role="tablist" id="tabs">
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="signals" aria-selected="true">매수 시그널<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-signals">0</span></button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="watch" aria-selected="false">돌파 대기<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-watch">0</span></button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="config" aria-selected="false">전략 설정</button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="guide" aria-selected="false">가이드 · 근거</button>
+  <div class="nav nav-tabs mb-3" role="tablist" id="tabs">
+    <button class="nav-link tab active" role="tab" data-tab="signals" aria-selected="true">매수 시그널<span class="badge rounded-pill bg-s2 text-body-secondary ms-1" id="c-signals">0</span></button>
+    <button class="nav-link tab" role="tab" data-tab="watch" aria-selected="false">돌파 대기<span class="badge rounded-pill bg-s2 text-body-secondary ms-1" id="c-watch">0</span></button>
+    <button class="nav-link tab" role="tab" data-tab="config" aria-selected="false">전략 설정</button>
+    <button class="nav-link tab" role="tab" data-tab="guide" aria-selected="false">가이드 · 근거</button>
   </div>
 
   <div id="view"></div>
-  <div id="detail"></div>
+  <div id="detail" data-oc="bottom"></div>
 
-  <footer class="mt-6 text-xs text-txt3 text-center">투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 데이터: 토스증권 OpenAPI</footer>
+  <footer class="mt-4 small text-body-tertiary text-center">투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 데이터: 토스증권 OpenAPI</footer>
 </div>
 
-
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 const fmt = (n, d = 0) => n == null || Number.isNaN(n) ? "–" :
@@ -96,12 +109,12 @@ async function refresh() {
     const rg = $("#regime");
     rg.hidden = !g.available;
     if (g.available) {
-      rg.className = "flex flex-wrap items-center gap-2.5 px-3.5 py-2.5 rounded-[10px] mb-3.5 "
-        + "text-[13px] border " + (g.on ? "tint-good border-good" : "tint-bad border-bad");
+      rg.className = "d-flex flex-wrap align-items-center gap-2 px-3 py-2 rounded-3 mb-3 small border "
+        + (g.on ? "tint-good border-good" : "tint-bad border-bad");
       rg.innerHTML = `<b>시장 국면 ${g.on ? "우호 ✅" : "비우호 ⚠"}</b>
         <span>${g.symbol} ${fmt(g.close, 2)} / ${g.ma}일선 ${fmt(g.ma_value, 2)}
         (${g.gap_pct > 0 ? "+" : ""}${g.gap_pct}%)</span>
-        <span class="text-txt3">${g.on
+        <span class="text-body-tertiary">${g.on
           ? "백테스트상 이 국면의 시그널 평균 +0.173R"
           : "이 국면의 시그널은 백테스트 평균 −0.117R — 신규 진입 자제 권장"}</span>`;
     }
@@ -118,9 +131,9 @@ async function refresh() {
   }
 }
 
-const DOT = { live: "bg-good dot-live", busy: "bg-warn dot-busy", err: "bg-bad", "": "bg-txt3" };
+const DOT = { live: "bg-good dot-live", busy: "bg-warning dot-busy", err: "bg-bad", "": "bg-secondary" };
 function setStatus(kind, text) {
-  $("#status-dot").className = `w-[7px] h-[7px] rounded-full ${DOT[kind] || DOT[""]}`;
+  $("#status-dot").className = `d-inline-block rounded-circle ${DOT[kind] || DOT[""]}`;
   $("#status-text").textContent = text;
 }
 
@@ -165,9 +178,13 @@ setInterval(() => {
 /* ------------------------------------------------------------------ 탭 */
 document.querySelectorAll(".tab").forEach(btn => {
   btn.setAttribute("aria-selected", String(btn.dataset.tab === TAB));
+  btn.classList.toggle("active", btn.dataset.tab === TAB);
   btn.onclick = () => {
     TAB = btn.dataset.tab;
-    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
+    document.querySelectorAll(".tab").forEach(b => {
+      b.setAttribute("aria-selected", String(b === btn));
+      b.classList.toggle("active", b === btn);
+    });
     renderTab();
   };
 });
@@ -205,22 +222,22 @@ const TIPS = {
 };
 
 const EMPTY = (text) =>
-  `<div class="bg-s1 border border-line rounded-xl py-12 px-5 text-center text-txt3">${text}</div>`;
+  `<div class="card card-body py-5 px-4 text-center text-body-tertiary">${text}</div>`;
 
 /* 등급 배지 색 — A+·A 는 양호, B 는 관망, C·D 는 경고 */
 const GRADE_BG = { "A+": "bg-good", "A": "bg-good", "B": "bg-accent",
-                   "C": "bg-warn text-black", "D": "bg-bad" };
+                   "C": "bg-warning text-dark", "D": "bg-bad" };
 const gradeBadge = (grade) =>
-  `<span class="text-[11px] font-bold px-1.5 py-px rounded text-white ${GRADE_BG[grade] || "bg-txt3"}">${grade}</span>`;
+  `<span class="badge fw-bold text-white ${GRADE_BG[grade] || "bg-secondary"}">${grade}</span>`;
 const scoreBar = (pct) =>
-  `<div class="h-[5px] rounded-[3px] bg-s2 overflow-hidden min-w-[74px]">
-     <i class="block h-full bg-accent" style="width:${pct}%"></i></div>`;
+  `<div class="rounded-1 bg-s2 overflow-hidden" style="height:5px;min-width:74px">
+     <i class="d-block h-100 bg-accent" style="width:${pct}%"></i></div>`;
 
 function scoreCell(r) {
   if (r["점수"] == null) return "–";
-  return `<div class="leading-tight pt-1">
-      <div class="flex items-baseline gap-1 tabular-nums">
-        <b class="text-[17px] font-bold">${r["점수"]}</b>${gradeBadge(r["등급"])}</div>
+  return `<div class="lh-sm pt-1">
+      <div class="d-flex align-items-baseline gap-1 tnum">
+        <b class="fs-5 fw-bold">${r["점수"]}</b>${gradeBadge(r["등급"])}</div>
       ${scoreBar(r["점수"])}</div>`;
 }
 
@@ -230,12 +247,12 @@ let GRID = null, GRID_KIND = null, GRID_ROWS = [];
 /** 그리드를 담을 상자. 탭을 오갈 때마다 만들고 이전 그리드는 정리한다. */
 function gridHost() {
   if (GRID) { GRID.destroy(); GRID = null; }
-  $("#view").innerHTML = `<div id="grid" class="grid-clickable w-full h-[min(60vh,560px)]"></div>`;
+  $("#view").innerHTML = `<div id="grid" class="grid-clickable w-100" style="height:min(60vh,560px)"></div>`;
   return $("#grid");
 }
 
 /* 선택된 행을 표시한다 (상세 패널과 짝) */
-const ROW_CLASS = { "!bg-s2": (p) => !!SELECTED && p.data && SELECTED["종목코드"] === p.data["종목코드"] };
+const ROW_CLASS = { "bg-s2": (p) => !!SELECTED && p.data && SELECTED["종목코드"] === p.data["종목코드"] };
 
 const stockCol = (field, cls = "") => ({
   field, minWidth: 110,
@@ -257,30 +274,30 @@ function renderSignals() {
       columns: [
         { field: "점수", headerTooltip: TIPS["점수"], minWidth: 132, sort: "desc",
           cellRenderer: (p) => scoreCell(p.data) },
-        { ...stockCol("종목코드", "font-semibold"), headerName: "종목코드" },
+        { ...stockCol("종목코드", "fw-semibold"), headerName: "종목코드" },
         { field: "종목명", minWidth: 140, cellRenderer: (p) =>
             StockMenu.link(p.data, p.value) + (p.data["유의사항"] || [])
-              .map(w => `<span class="ml-1.5 px-1.5 py-px rounded-full text-[11px] font-semibold tint-warn">${w}</span>`).join("") },
+              .map(w => `<span class="badge rounded-pill tint-warn text-body ms-1">${w}</span>`).join("") },
         { field: "기준봉일", headerTooltip: TIPS["기준봉일"], minWidth: 100,
-          cellClass: "text-txt3 tabular-nums", valueFormatter: (p) => p.value.slice(5) },
+          cellClass: "text-body-tertiary tnum", valueFormatter: (p) => p.value.slice(5) },
         { field: "기준봉_윗꼬리%", headerName: "윗꼬리", headerTooltip: TIPS["윗꼬리"],
           type: "numericColumn", minWidth: 92, valueFormatter: (p) => p.value + "%" },
         { field: "기준봉_거래량배수", headerName: "기준봉 거래량", headerTooltip: TIPS["기준봉 거래량"],
           type: "numericColumn", minWidth: 118, valueFormatter: (p) => "×" + p.value },
         { field: "조정일수", headerName: "조정", headerTooltip: TIPS["조정"], type: "numericColumn",
-          minWidth: 84, cellClass: "text-txt3 tabular-nums", valueFormatter: (p) => p.value + "일" },
+          minWidth: 84, cellClass: "text-body-tertiary tnum", valueFormatter: (p) => p.value + "일" },
         numCol("전일고가", { headerTooltip: TIPS["전일고가"] }),
         { ...numCol("현재가", { headerTooltip: TIPS["현재가"] }),
-          cellClass: (p) => "tabular-nums font-semibold "
+          cellClass: (p) => "tnum fw-semibold "
             + (p.data["현재가"] >= p.data["전일고가"] ? "text-up" : "text-down") },
         { field: "거래량증가율%", headerName: "거래량 증가", headerTooltip: TIPS["거래량 증가"],
-          type: "numericColumn", minWidth: 110, cellClass: "tabular-nums text-up font-semibold",
+          type: "numericColumn", minWidth: 110, cellClass: "tnum text-up fw-semibold",
           valueFormatter: (p) => "+" + fmt(p.value) + "%" },
         numCol("매수가", { headerTooltip: TIPS["매수가"] }),
         { ...numCol("손절가", { headerTooltip: TIPS["손절가"] }),
-          cellClass: "tabular-nums text-down font-semibold" },
+          cellClass: "tnum text-down fw-semibold" },
         { field: "손절폭%", headerName: "손절폭", headerTooltip: TIPS["손절폭"], type: "numericColumn",
-          minWidth: 92, cellClass: "tabular-nums text-txt3", valueFormatter: (p) => p.value + "%" },
+          minWidth: 92, cellClass: "tnum text-body-tertiary", valueFormatter: (p) => p.value + "%" },
       ],
       onRow: (data, ev) => {
         if (!StockMenu.fromEvent(ev, data["종목코드"], data["종목명"])) selectSignal(data);
@@ -300,16 +317,16 @@ function renderWatch() {
     GRID = Grid.create(gridHost(), {
       rows, options: { rowClassRules: ROW_CLASS },
       columns: [
-        { ...stockCol("종목코드", "font-semibold"), headerName: "종목코드" },
+        { ...stockCol("종목코드", "fw-semibold"), headerName: "종목코드" },
         stockCol("종목명"),
         { field: "기준봉일", headerTooltip: TIPS["기준봉일"], minWidth: 100,
-          cellClass: "text-txt3 tabular-nums", valueFormatter: (p) => p.value.slice(5) },
+          cellClass: "text-body-tertiary tnum", valueFormatter: (p) => p.value.slice(5) },
         { field: "경과일", headerName: "경과", headerTooltip: TIPS["경과"], type: "numericColumn",
-          minWidth: 88, cellClass: "text-txt3 tabular-nums", valueFormatter: (p) => p.value + "일" },
+          minWidth: 88, cellClass: "text-body-tertiary tnum", valueFormatter: (p) => p.value + "일" },
         { ...numCol("감시_돌파가(전일고가)", { headerName: "감시 돌파가(전일고가)", minWidth: 168,
-            headerTooltip: TIPS["감시 돌파가(전일고가)"] }), cellClass: "tabular-nums text-up font-semibold" },
+            headerTooltip: TIPS["감시 돌파가(전일고가)"] }), cellClass: "tnum text-up fw-semibold" },
         { ...numCol("기준봉저가(손절)", { headerName: "기준봉 저가(손절)", minWidth: 148,
-            headerTooltip: TIPS["기준봉 저가(손절)"] }), cellClass: "tabular-nums text-down font-semibold" },
+            headerTooltip: TIPS["기준봉 저가(손절)"] }), cellClass: "tnum text-down fw-semibold" },
         { field: "조정거래량비", headerTooltip: TIPS["조정 거래량비"], type: "numericColumn", minWidth: 118 },
       ],
       onRow: (data, ev) => {
@@ -344,11 +361,11 @@ async function renderConfig() {
     let v = CFG[k];
     if (Array.isArray(v)) v = v.join(", ");
     else if (typeof v === "number" && v >= 1e8) v = (v / 1e8).toFixed(0) + "억";
-    return `<div class="flex justify-between gap-3 pb-1.5 border-b border-dashed border-line text-[13px]">
-      <dt class="text-txt2">${label}</dt><dd class="m-0 font-semibold tabular-nums">${v}</dd></div>`;
+    return `<div class="col-12 col-md-6 col-xl-4"><div class="d-flex justify-content-between gap-3 pb-1 small" style="border-bottom:1px dashed var(--border)">
+      <dt class="text-body-secondary fw-normal">${label}</dt><dd class="m-0 fw-semibold tnum">${v}</dd></div></div>`;
   }).join("");
-  $("#view").innerHTML = `<div class="bg-s1 border border-line rounded-xl overflow-hidden">
-    <dl class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-y-2 gap-x-5 m-0 p-4">${items}</dl></div>`;
+  $("#view").innerHTML = `<div class="card overflow-hidden"><div class="card-body">
+    <dl class="row gx-4 gy-2 mb-0">${items}</dl></div></div>`;
 }
 
 /* ------------------------------------------------------------------ 상세 */
@@ -361,12 +378,12 @@ async function selectWatch(r) {
 
 async function renderDetail(r) {
   const d = $("#detail");
-  d.innerHTML = `<div class="mt-3.5">${EMPTY("차트 불러오는 중…")}</div>`;
+  d.innerHTML = `<div class="mt-3">${EMPTY("차트 불러오는 중…")}</div>`;
   let data;
   try {
     data = await (await fetch(`/api/chart/${r["종목코드"]}?count=60`)).json();
   } catch (e) {
-    d.innerHTML = `<div class="mt-3.5">${EMPTY("차트를 불러오지 못했습니다.")}</div>`;
+    d.innerHTML = `<div class="mt-3">${EMPTY("차트를 불러오지 못했습니다.")}</div>`;
     return;
   }
   const risk = r["매수가"] - r["손절가"];
@@ -383,28 +400,26 @@ async function renderDetail(r) {
     ["목표가 1R/2R/3R", (r["목표가"] || []).map(v => fmt(v)).join(" · ")],
   ];
   const swatch = (color, extra = "") =>
-    `<i class="inline-block w-2.5 h-2.5 rounded-sm mr-1.5 -mb-px ${extra}" style="background:${color}"></i>`;
-  d.innerHTML = `<div class="mt-3.5 bg-s1 border border-line rounded-xl p-4">
-    <div class="flex flex-wrap items-baseline gap-2.5 mb-1">
-      <h2 class="m-0 text-[17px] font-semibold">${r["종목명"]}
-        <span class="text-txt3 font-normal tabular-nums">${r["종목코드"]}</span></h2>
-      <a class="text-xs px-2.5 py-1 rounded-lg border border-line bg-s2 text-txt2 no-underline
-                hover:border-accent hover:text-accent"
+    `<i class="d-inline-block rounded-1 me-1" style="width:10px;height:10px;margin-bottom:-1px;background:${color};${extra}"></i>`;
+  d.innerHTML = `<div class="mt-3 card card-body p-3">
+    <div data-oc-head class="d-flex flex-wrap align-items-baseline gap-2">
+      <h2 class="m-0 fs-5 fw-semibold">${r["종목명"]}
+        <span class="text-body-tertiary fw-normal tnum">${r["종목코드"]}</span></h2>
+      <a class="btn btn-sm btn-outline-secondary"
          href="${tossUrl(r["종목코드"])}" target="_blank" rel="noopener noreferrer">토스증권에서 열기 ↗</a>
-      <span class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold
-                   bg-s2 text-txt2 border border-line">${r._watch ? "돌파 대기" : "매수 시그널"}</span>
+      <span class="badge rounded-pill bg-s2 text-body-secondary border border-line fw-semibold">${r._watch ? "돌파 대기" : "매수 시그널"}</span>
     </div>
     ${scoreBlock(r)}
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-y-2.5 gap-x-4 mt-3.5 mb-1.5">
-      ${stats.map(([k, v]) => `<div class="text-xs text-txt3">${k}
-        <strong class="block text-[15px] text-txt font-semibold tabular-nums">${v}</strong></div>`).join("")}</div>
+    <div class="row g-2 mt-2 mb-1">
+      ${stats.map(([k, v]) => `<div class="col-6 col-sm-4 col-md-3 col-lg-2"><div class="small text-body-tertiary">${k}
+        <strong class="d-block fs-6 text-body fw-semibold tnum">${v}</strong></div></div>`).join("")}</div>
     ${r._watch ? "" : posCalc(r)}
-    <div class="relative mt-2.5" id="chart-box"></div>
-    <div class="flex flex-wrap gap-3.5 text-xs text-txt2 mt-2">
+    <div class="position-relative mt-2" id="chart-box"></div>
+    <div class="d-flex flex-wrap gap-3 small text-body-secondary mt-2">
       <span>${swatch("var(--up)")}양봉(상승)</span>
       <span>${swatch("var(--down)")}음봉(하락)</span>
       <span>${swatch("var(--warning)")}기준봉</span>
-      <span>${swatch("var(--text-muted)", "!h-0.5 !rounded-none")}매수가 / 손절가</span>
+      <span>${swatch("var(--text-muted)", "height:2px;border-radius:0")}매수가 / 손절가</span>
     </div>
   </div>`;
   if (!r._watch) bindPosCalc(r);
@@ -418,22 +433,22 @@ function scoreBlock(r) {
   if (!items.length) return "";
   const pass = r["점수"] >= ENTRY_CUTOFF;
   const rows = items.map(i => `<tr>
-      <td class="py-1 pr-2 text-txt2 w-[110px]">${i["항목"]}</td>
-      <td class="py-1 pr-2 w-[90px]">${scoreBar(i["만점"] ? i["점수"] / i["만점"] * 100 : 0)}</td>
-      <td class="py-1 pr-2 w-[70px] font-semibold tabular-nums">${i["점수"]} / ${i["만점"]}</td>
-      <td class="py-1 text-txt3 text-xs">${i["값"]} — ${i["설명"]}</td></tr>`).join("");
-  return `<div class="text-xs text-txt3 mt-1">진입 점수
-      <strong class="flex items-baseline gap-1.5 tabular-nums">
-        <b class="text-[30px] font-bold text-txt">${r["점수"]}</b>
-        <span class="text-txt3 text-[13px] font-normal">/ 100</span>
+      <td class="text-body-secondary" style="width:110px">${i["항목"]}</td>
+      <td style="width:90px">${scoreBar(i["만점"] ? i["점수"] / i["만점"] * 100 : 0)}</td>
+      <td class="fw-semibold tnum" style="width:70px">${i["점수"]} / ${i["만점"]}</td>
+      <td class="text-body-tertiary small">${i["값"]} — ${i["설명"]}</td></tr>`).join("");
+  return `<div class="small text-body-tertiary mt-1">진입 점수
+      <strong class="d-flex align-items-baseline gap-2 tnum">
+        <b class="fw-bold text-body" style="font-size:30px">${r["점수"]}</b>
+        <span class="text-body-tertiary small fw-normal">/ 100</span>
         ${gradeBadge(r["등급"])}
-        <span class="text-txt3 text-[13px] font-normal">${r["판단"]}</span></strong>
-      <div class="mt-1 text-xs ${pass ? "text-good" : "text-txt3"}">
+        <span class="text-body-tertiary small fw-normal">${r["판단"]}</span></strong>
+      <div class="mt-1 small ${pass ? "text-good" : "text-body-tertiary"}">
         실전 컷오프 ${ENTRY_CUTOFF}점 — ${pass
           ? "충족 (실측 A 60.0% / A+ 69.1% 승률)"
           : "미달 (65~74점 구간 실측 승률 50.1%, 평균 −0.048R)"}</div>
     </div>
-    <table class="w-full mt-1"><tbody>${rows}</tbody></table>`;
+    <table class="table table-sm table-borderless align-middle mb-0 mt-1" style="--bs-table-bg:transparent"><tbody>${rows}</tbody></table>`;
 }
 
 
@@ -442,32 +457,31 @@ let GUIDE = null;
 
 // 서술형 컬럼은 좌측 정렬한다 (숫자 컬럼만 우측 정렬)
 const WIDE = new Set(["구간별 점수", "조건"]);
-const TH = "px-3 py-2 text-right text-xs font-semibold text-txt3 bg-s2 whitespace-nowrap";
-const tbl = (cols, rows, rowFn) => `<div class="overflow-x-auto border border-line rounded-xl my-2">
-  <table class="w-full border-collapse tabular-nums [&_td]:px-3 [&_td]:py-2 [&_td]:text-right
-                [&_td]:border-t [&_td]:border-line [&_tr>td:first-child]:text-left">
-  <thead><tr>${cols.map(c => `<th class="${TH}${WIDE.has(c) ? " !text-left" : ""}">${c}</th>`).join("")}</tr></thead>
+const TH = "small fw-semibold text-body-tertiary bg-s2 text-nowrap";
+const tbl = (cols, rows, rowFn) => `<div class="table-responsive border rounded-3 my-2">
+  <table class="table table-sm align-middle mb-0 tnum gtbl">
+  <thead><tr>${cols.map(c => `<th class="${TH}${WIDE.has(c) ? " tl" : ""}">${c}</th>`).join("")}</tr></thead>
   <tbody>${rows.map(rowFn).join("")}</tbody></table></div>`;
 
 const pick = (v) => v == null ? "–" : (v > 0 ? "+" : "") + Number(v).toFixed(3) + "R";
-const rc = (v) => v == null ? "" : (v > 0 ? "text-up font-semibold" : "text-down font-semibold");
+const rc = (v) => v == null ? "" : (v > 0 ? "text-up fw-semibold" : "text-down fw-semibold");
 
 async function renderGuide() {
   if (GRID) { GRID.destroy(); GRID = null; GRID_KIND = null; }
   if (!GUIDE) GUIDE = await (await fetch("/api/guide")).json();
   const g = GUIDE;
 
-  const steps = `<div class="grid grid-cols-[repeat(auto-fit,minmax(260px,1fr))] gap-3">
-    ${g["단계"].map(s => `<div class="bg-s2 rounded-[10px] px-4 py-3.5">
-      <div class="text-[11px] font-bold text-accent tracking-wider">${s["단계"]}</div>
-      <h4 class="mt-1 mb-1.5 text-[15px] font-semibold">${s["이름"]}</h4>
-      <p class="text-[13px] mb-2 text-txt2">${s["설명"]}</p>
-      <ul class="m-0 pl-4 text-[12.5px] text-txt2 list-disc">
-        ${s["조건"].map(c => `<li class="mb-0.5">${c}</li>`).join("")}</ul></div>`).join("")}</div>`;
+  const steps = `<div class="row g-3">
+    ${g["단계"].map(s => `<div class="col-md-6 col-xl-4"><div class="bg-s2 rounded-3 px-3 py-3 h-100">
+      <div class="fw-bold text-accent small" style="letter-spacing:.05em">${s["단계"]}</div>
+      <h4 class="mt-1 mb-2 fs-6 fw-semibold">${s["이름"]}</h4>
+      <p class="small mb-2 text-body-secondary">${s["설명"]}</p>
+      <ul class="m-0 ps-3 small text-body-secondary">
+        ${s["조건"].map(c => `<li class="mb-1">${c}</li>`).join("")}</ul></div></div>`).join("")}</div>`;
 
   const factors = tbl(["요인", "배점", "구간별 점수"], g["요인"], f => `<tr>
       <td>${f["항목"]}</td><td>${f["배점"]}점</td>
-      <td class="!text-left">${f["구간"]
+      <td class="tl">${f["구간"]
         .map(b => `${b["설명"]} <b>${b["점수"]}점</b>`).join(" · ")}</td></tr>`);
 
   const grades = tbl(["등급", "점수 구간", "과거 거래수", "승률", "평균 손익"],
@@ -480,7 +494,7 @@ async function renderGuide() {
   const profiles = tbl(["프로파일", "조건", "거래수", "승률", "평균 손익", "수익팩터", "최대낙폭"],
     g["프로파일"], r => `<tr>
       <td>${r["채택"] ? "✅ " : ""}${r["이름"]}</td>
-      <td class="!text-left">${r["조건"]}</td>
+      <td class="tl">${r["조건"]}</td>
       <td>${fmt(r["거래수"])}</td><td>${Number(r["승률"]).toFixed(1)}%</td>
       <td class="${rc(r["평균R"])}">${pick(r["평균R"])}</td>
       <td>${r["수익팩터"]}</td><td>${r["MDD"]}R</td></tr>`);
@@ -501,11 +515,9 @@ async function renderGuide() {
   const exits = Object.entries(g["청산규칙"])
     .map(([k, v]) => `<li><b>${k}</b> — ${v}</li>`).join("");
 
-  const CALLOUT = "border-l-[3px] bg-s2 px-4 py-3 rounded-r-lg my-3 text-[13px]";
-  const H3 = "text-[15px] font-semibold mt-6 mb-2.5 pb-1.5 border-b border-line first:mt-0";
-  $("#view").innerHTML = `<div class="bg-s1 border border-line rounded-xl px-5 py-5 leading-[1.75]
-      [&_p]:mb-2.5 [&_p]:text-txt2 [&_code]:bg-s2 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded
-      [&_ul]:pl-5 [&_ul]:list-disc [&_li]:mb-1">
+  const CALLOUT = "border-start border-3 bg-s2 px-3 py-2 rounded-end-2 my-3 small";
+  const H3 = "fs-6 fw-semibold mt-4 mb-2 pb-1 border-bottom";
+  $("#view").innerHTML = `<div class="card card-body px-4 py-4 guide">
     <h3 class="${H3}">1. 이 전략은 무엇인가</h3>
     <p>바닥권에서 <b>세력이 물량을 매집한 흔적(기준봉)</b>을 찾고, 매물이 소화되길 기다렸다가
        <b>전일 고가를 거래량과 함께 돌파하는 순간</b>에 진입합니다. 3단계로 판정합니다.</p>
@@ -532,7 +544,7 @@ async function renderGuide() {
     <p>${g["포지션"]["설명"]}</p>
     <div class="${CALLOUT} border-accent"><b>${g["포지션"]["공식"]}</b>
       ${g["포지션"]["권장"].map(v => `• ${v}`).join("<br>")}</div>
-    <p class="!text-txt3">시그널 행을 클릭하면 상세 패널에서 <b>계좌 잔고를 넣어 투입금액을 바로 계산</b>할 수 있습니다.</p>
+    <p class="text-body-tertiary">시그널 행을 클릭하면 상세 패널에서 <b>계좌 잔고를 넣어 투입금액을 바로 계산</b>할 수 있습니다.</p>
 
     <h3 class="${H3}">5. 언제 파나 — 청산 규칙</h3>
     <p>아래는 백테스트에 쓴 규칙 그대로입니다. 살 때 미리 정해두고 기계적으로 지키는 게 핵심입니다.</p>
@@ -541,15 +553,15 @@ async function renderGuide() {
     <h3 class="${H3}">6. 왜 이 설정인가 — 검증 기록</h3>
     <p><b>전략 프로파일</b> — 원본 스펙 그대로는 3년 기준 손실이었습니다.</p>
     ${profiles}
-    <p class="mt-3.5"><b>손절 기준</b> — 타이트하게 잡으면 휩쏘에 털립니다(평균 보유 2.2일).</p>
+    <p class="mt-3"><b>손절 기준</b> — 타이트하게 잡으면 휩쏘에 털립니다(평균 보유 2.2일).</p>
     ${stops}
-    <p class="mt-3.5"><b>시장 국면 필터</b> — 가장 효과가 컸습니다. 이동평균 값을 5·10·20·60 어떻게 바꿔도
+    <p class="mt-3"><b>시장 국면 필터</b> — 가장 효과가 컸습니다. 이동평균 값을 5·10·20·60 어떻게 바꿔도
        같은 방향이라 특정 값에 끼워맞춘 결과가 아닙니다.</p>
     ${regimes}
 
     <h3 class="${H3}">7. 반드시 알아야 할 한계</h3>
     ${g["주의"].map(c => `<div class="${CALLOUT} border-bad">${c}</div>`).join("")}
-    <p class="!text-txt3 mt-4">측정일 ${g["측정일"]} ·
+    <p class="text-body-tertiary mt-4">측정일 ${g["측정일"]} ·
       표본 ${g["표본"]["기간"]} ${fmt(g["표본"]["종목수"])}종목 ${fmt(g["표본"]["봉수"])}봉</p>
   </div>`;
 }
@@ -563,22 +575,21 @@ function posCalc(r) {
     bal = Number(localStorage.getItem("balance")) || bal;
     pct = Number(localStorage.getItem("riskPct")) || pct;
   } catch (e) {}
-  const FIELD = "font-sans text-sm px-2.5 py-1.5 rounded-lg border border-line bg-s1 text-txt " +
-                "w-[150px] tabular-nums";
-  return `<div class="bg-s2 rounded-[10px] px-4 py-3.5 mt-3">
-    <div class="flex flex-wrap gap-3 items-end">
-      <div><label class="block text-xs text-txt3 mb-1">계좌 잔고 (원)</label>
-        <input class="${FIELD}" id="pc-bal" type="number" step="1000000" value="${bal}"></div>
-      <div><label class="block text-xs text-txt3 mb-1">1회 허용 손실</label>
-        <select class="${FIELD}" id="pc-pct">${[0.5, 1, 1.5, 2].map(v =>
+  const FIELD = UI.cls.input;
+  return `<div class="bg-s2 rounded-3 px-3 py-3 mt-3">
+    <div class="d-flex flex-wrap gap-3 align-items-end">
+      <div><label class="${UI.cls.label}">계좌 잔고 (원)</label>
+        <input class="${FIELD}" style="width:150px" id="pc-bal" type="number" step="1000000" value="${bal}"></div>
+      <div><label class="${UI.cls.label}">1회 허용 손실</label>
+        <select class="form-select form-select-sm tnum" style="width:150px" id="pc-pct">${[0.5, 1, 1.5, 2].map(v =>
           `<option value="${v}" ${v === pct ? "selected" : ""}>${v}%</option>`).join("")}</select></div>
-      <div class="text-xs text-txt3 pb-2">투입금액 = (잔고 × 허용 손실) ÷ 손절폭 ${r["손절폭%"]}%</div>
+      <div class="small text-body-tertiary pb-1">투입금액 = (잔고 × 허용 손실) ÷ 손절폭 ${r["손절폭%"]}%</div>
     </div>
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-y-2 gap-x-4 mt-3" id="pc-out"></div>
-    <div class="flex flex-wrap items-center gap-2.5 mt-3.5 pt-3 border-t border-line">
+    <div class="row g-2 mt-2" id="pc-out"></div>
+    <div class="d-flex flex-wrap align-items-center gap-2 mt-3 pt-3 border-top">
       <button class="${UI.cls.btn}" id="od-dry">모의 주문 확인</button>
       <button class="${UI.cls.btnDanger}" id="od-live">토스 매수 주문</button>
-      <span class="text-xs text-txt3" id="od-mode"></span>
+      <span class="small text-body-tertiary" id="od-mode"></span>
     </div>
     <div id="od-result"></div>
   </div>`;
@@ -595,13 +606,14 @@ function bindPosCalc(r) {
     const shares = Math.floor(amount / r["매수가"]);
     const invested = shares * r["매수가"];
     const t = (r["목표가"] || [])[0];
-    const OUT = "block text-[17px] font-semibold tabular-nums text-txt";
-    out.innerHTML = `
-      <div class="text-xs text-txt3">매수 수량<strong class="${OUT}">${fmt(shares)}주</strong></div>
-      <div class="text-xs text-txt3">투입 금액<strong class="${OUT}">${fmt(invested)}원</strong></div>
-      <div class="text-xs text-txt3">손절 시 손실<strong class="${OUT} !text-down">−${fmt(shares * (r["매수가"] - r["손절가"]))}원</strong></div>
-      <div class="text-xs text-txt3">1R 도달 시<strong class="${OUT} !text-up">+${fmt(t ? shares * (t - r["매수가"]) : 0)}원</strong></div>
-      <div class="text-xs text-txt3">계좌 대비 비중<strong class="${OUT}">${b ? (invested / b * 100).toFixed(1) : 0}%</strong></div>`;
+    const OUT = "d-block fs-5 fw-semibold tnum";
+    const cell = (lab, cls, v) => `<div class="col-6 col-sm-4 col-md"><div class="small text-body-tertiary">${lab}<strong class="${OUT} ${cls}">${v}</strong></div></div>`;
+    out.innerHTML =
+      cell("매수 수량", "text-body", `${fmt(shares)}주`) +
+      cell("투입 금액", "text-body", `${fmt(invested)}원`) +
+      cell("손절 시 손실", "text-down", `−${fmt(shares * (r["매수가"] - r["손절가"]))}원`) +
+      cell("1R 도달 시", "text-up", `+${fmt(t ? shares * (t - r["매수가"]) : 0)}원`) +
+      cell("계좌 대비 비중", "text-body", `${b ? (invested / b * 100).toFixed(1) : 0}%`);
     try {
       localStorage.setItem("balance", String(b));
       localStorage.setItem("riskPct", String(p));
@@ -659,7 +671,7 @@ async function bindOrder(r, getShares) {
 
   const OD = { good: "border-good tint-good", bad: "border-bad tint-bad", "": "border-line bg-s1" };
   const show = (html, kind = "") =>
-    { box.innerHTML = `<div class="mt-3 px-3.5 py-3 rounded-[10px] text-[13px] border ${OD[kind]}">${html}</div>`; };
+    { box.innerHTML = `<div class="mt-3 px-3 py-2 rounded-3 small border ${OD[kind]}">${html}</div>`; };
 
   const send = async (dryRun) => {
     const shares = getShares();
@@ -678,9 +690,9 @@ async function bindOrder(r, getShares) {
       const steps = (data.steps || []).map(s =>
         `<li><b>${s["단계"]}</b> — ${s["상태"]} · ${s["내용"]}</li>`).join("");
       show(`<b>${data.dry_run ? "🧪 모의 실행 결과" : "✅ 주문 접수"}</b>
-        <div class="text-txt3 my-1 mb-2">${data.message}</div>
-        <ul class="m-0 pl-5 list-disc">${steps}</ul>
-        <div class="text-txt3 text-xs">
+        <div class="text-body-tertiary my-1 mb-2">${data.message}</div>
+        <ul class="m-0 ps-4">${steps}</ul>
+        <div class="text-body-tertiary small">
           호가 정렬 후 — 매수 ${fmt(p.entry)} · 손절 ${fmt(p.stop)} · 익절 ${fmt(p.target)} ·
           ${fmt(p.quantity)}주 · 투입 ${fmt(p.amount)}원 ·
           최대 손실 −${fmt(p.risk_amount)}원 / 익절 시 +${fmt(p.reward_amount)}원</div>`,
@@ -768,9 +780,7 @@ function drawChart(candles, r) {
       <rect id="hit" x="${PL}" y="0" width="${W - PL - PR}" height="${H}" fill="transparent"/>
       <line id="cross" x1="0" y1="${PT}" x2="0" y2="${PT + PRICE_H + GAP + VOL_H}" stroke="var(--text-muted)" stroke-width="1" stroke-dasharray="3 3" opacity="0"/>
     </svg>
-    <div id="tip" class="absolute pointer-events-none opacity-0 transition-opacity duration-100
-         bg-s2 border border-line rounded-lg px-2.5 py-2 text-xs leading-relaxed whitespace-nowrap
-         shadow-lg tabular-nums z-[5] [&_b]:block [&_b]:mb-0.5"></div>`;
+    <div id="tip" class="position-absolute pe-none bg-s2 border border-line rounded-2 px-2 py-2 small text-nowrap shadow tnum" style="opacity:0;transition:opacity .1s;line-height:1.5;z-index:5"></</div>`;
 
   const svg = box.querySelector("svg"), tip = $("#tip"), cross = box.querySelector("#cross");
   svg.addEventListener("mousemove", ev => {
@@ -780,7 +790,7 @@ function drawChart(candles, r) {
     const c = candles[i];
     cross.setAttribute("x1", cx(i)); cross.setAttribute("x2", cx(i)); cross.setAttribute("opacity", ".7");
     tip.style.opacity = 1;
-    tip.innerHTML = `<b>${c.date}${c.date === baseDate ? " · 기준봉" : ""}</b>
+    tip.innerHTML = `<b class="d-block mb-1">${c.date}${c.date === baseDate ? " · 기준봉" : ""}</b>
       시 ${fmt(c.open)} · 고 ${fmt(c.high)}<br>저 ${fmt(c.low)} · 종 ${fmt(c.close)}<br>
       거래량 ${fmt(c.volume)}`;
     const px = cx(i) / W * rect.width;

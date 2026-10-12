@@ -1,8 +1,9 @@
-/* 테마 토큰 + Tailwind 로 표현하기 어려운 최소한의 규칙만 둔다.
-   화면 스타일은 전부 Tailwind 유틸리티(`/static/ui.js` 의 색 매핑)로 쓴다.
-   색상: 상승/양봉 --up(적색), 하락/음봉 --down(청색) — 한국 시장 관례. */
-:root {
-  color-scheme: light;
+/* 테마 토큰 + Bootstrap 5.3 변수 매핑 + 최소한의 보조 클래스.
+   화면 스타일은 Bootstrap 유틸리티/컴포넌트로 쓴다. 이 파일에는 Bootstrap 에 없는 것만 둔다.
+   테마는 <html data-bs-theme="light|dark"> — gnb.js 가 저장값·?theme=·시스템 설정으로 정한다.
+   색상: 상승/양봉 --up(적색), 하락/음봉 --down(청색) — 한국 시장 관례.
+   ⚠ 테마 토큰은 화면 HTML 에 다시 정의하지 말 것 — 이 파일 한 곳에만 둔다. */
+:root, [data-bs-theme="light"] {
   --surface-0: #f4f3f0;
   --surface-1: #fcfcfb;
   --surface-2: #eceae5;
@@ -18,24 +19,7 @@
   --accent: #2a78d6;
   --grid: rgba(11,11,11,.08);
 }
-@media (prefers-color-scheme: dark) {
-  :root:where(:not([data-theme="light"])) {
-    color-scheme: dark;
-    --surface-0: #121211;
-    --surface-1: #1a1a19;
-    --surface-2: #232322;
-    --border:    #35352f;
-    --text-primary:   #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted:     #8b8a81;
-    --up:   #e66767;
-    --down: #3987e5;
-    --accent: #3987e5;
-    --grid: rgba(255,255,255,.09);
-  }
-}
-:root[data-theme="dark"] {
-  color-scheme: dark;
+[data-bs-theme="dark"] {
   --surface-0: #121211;
   --surface-1: #1a1a19;
   --surface-2: #232322;
@@ -49,19 +33,93 @@
   --grid: rgba(255,255,255,.09);
 }
 
-body {
-  background: var(--surface-0);
-  color: var(--text-primary);
+/* Bootstrap 변수를 앱 토큰에 연결 — 컴포넌트(.card .table .form-control .modal …)가 테마를 따라온다. */
+:root, [data-bs-theme] {
+  --bs-font-sans-serif: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+                        "Segoe UI", "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+  --bs-body-font-family: var(--bs-font-sans-serif);
+  --bs-body-font-size: .9375rem;
+  --bs-body-bg: var(--surface-0);
+  --bs-body-bg-rgb: 244, 243, 240;
+  --bs-body-color: var(--text-primary);
+  --bs-secondary-color: var(--text-secondary);
+  --bs-tertiary-color: var(--text-muted);
+  --bs-secondary-bg: var(--surface-2);
+  --bs-tertiary-bg: var(--surface-2);
+  --bs-border-color: var(--border);
+  --bs-emphasis-color: var(--text-primary);
+  --bs-primary: var(--accent);
+  --bs-link-color: var(--accent);
+  --bs-link-hover-color: var(--accent);
+  --bs-success: var(--good);
+  --bs-warning: var(--warning);
+  --bs-danger: var(--critical);
+  --bs-border-radius: .5rem;
+  --bs-border-radius-lg: .75rem;
 }
+[data-bs-theme="dark"] { --bs-body-bg-rgb: 18, 18, 17; }
+body { background: var(--surface-0); color: var(--text-primary);
+       font-family: var(--bs-font-sans-serif); letter-spacing: -.01em; }
+.tnum { font-variant-numeric: tabular-nums; }
 
-/* 색 토큰이 CSS 변수라 Tailwind 의 투명도 수식(`bg-good/12`)을 못 쓴다.
-   경고 배너처럼 '옅게 깐 배경' 이 필요한 곳만 이 유틸을 쓴다. */
-.tint-accent { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.tint-good   { background: color-mix(in srgb, var(--good) 12%, transparent); }
-.tint-warn   { background: color-mix(in srgb, var(--warning) 16%, transparent); }
-.tint-bad    { background: color-mix(in srgb, var(--critical) 12%, transparent); }
+/* 카드·모달·오프캔버스·입력·표 배경을 표면 토큰에 맞춘다. */
+.card, .modal, .offcanvas, .dropdown-menu {
+  --bs-card-bg: var(--surface-1);
+  --bs-modal-bg: var(--surface-1);
+  --bs-offcanvas-bg: var(--surface-1);
+  --bs-border-color-translucent: var(--border);
+}
+.card { --bs-card-border-color: var(--border); --bs-card-cap-bg: var(--surface-2); }
+.form-control, .form-select { background-color: var(--surface-0); border-color: var(--border);
+                              color: var(--text-primary); }
+.form-control:focus, .form-select:focus { background-color: var(--surface-0); color: var(--text-primary);
+                                          border-color: var(--accent);
+                                          box-shadow: 0 0 0 .2rem color-mix(in srgb, var(--accent) 25%, transparent); }
+.form-check-input:checked { background-color: var(--accent); border-color: var(--accent); }
+.btn-primary { --bs-btn-bg: var(--accent); --bs-btn-border-color: var(--accent);
+               --bs-btn-hover-bg: var(--accent); --bs-btn-hover-border-color: var(--accent);
+               --bs-btn-active-bg: var(--accent); --bs-btn-active-border-color: var(--accent);
+               --bs-btn-color: #fff; --bs-btn-hover-color: #fff; --bs-btn-active-color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-danger { --bs-btn-bg: var(--critical); --bs-btn-border-color: var(--critical);
+              --bs-btn-hover-bg: var(--critical); --bs-btn-hover-border-color: var(--critical);
+              --bs-btn-active-bg: var(--critical); --bs-btn-active-border-color: var(--critical); }
+.btn-outline-secondary { --bs-btn-color: var(--text-primary); --bs-btn-border-color: var(--border);
+                         --bs-btn-hover-bg: var(--surface-2); --bs-btn-hover-border-color: var(--border);
+                         --bs-btn-hover-color: var(--text-primary);
+                         --bs-btn-active-bg: var(--surface-2); --bs-btn-active-color: var(--text-primary);
+                         --bs-btn-active-border-color: var(--border); background: var(--surface-1); }
+.nav-tabs { --bs-nav-tabs-border-color: var(--border);
+            --bs-nav-tabs-link-active-bg: transparent;
+            --bs-nav-tabs-link-active-border-color: var(--border) var(--border) var(--accent);
+            --bs-nav-link-color: var(--text-secondary); --bs-nav-link-hover-color: var(--text-primary); }
+.nav-tabs .nav-link.active { color: var(--text-primary); font-weight: 700; border-bottom: 2px solid var(--accent); }
 
-/* 점(●)이 살아 있음을 알리는 깜빡임 — Tailwind 기본 animate-pulse 보다 또렷하게. */
+/* 앱 색 유틸 — Bootstrap 의 text-success/danger 와 별개로 한국 시장 관례(상승=적색)와 앱 토큰을 쓴다. */
+.text-up { color: var(--up) !important; }
+.text-down { color: var(--down) !important; }
+.text-good { color: var(--good) !important; }
+.text-warn { color: var(--warning) !important; }
+.text-bad { color: var(--critical) !important; }
+.text-accent { color: var(--accent) !important; }
+.bg-s0 { background: var(--surface-0) !important; }
+.bg-s1 { background: var(--surface-1) !important; }
+.bg-s2 { background: var(--surface-2) !important; }
+.border-line { border-color: var(--border) !important; }
+.border-good { border-color: var(--good) !important; }
+.border-warn { border-color: var(--warning) !important; }
+.border-bad { border-color: var(--critical) !important; }
+.border-accent { border-color: var(--accent) !important; }
+/* 옅게 깐 배경 (경고 배너·배지 등) */
+.tint-accent { background: color-mix(in srgb, var(--accent) 12%, transparent) !important; }
+.tint-good   { background: color-mix(in srgb, var(--good) 12%, transparent) !important; }
+.tint-warn   { background: color-mix(in srgb, var(--warning) 16%, transparent) !important; }
+.tint-bad    { background: color-mix(in srgb, var(--critical) 12%, transparent) !important; }
+.bg-good { background: var(--good) !important; }
+.bg-bad  { background: var(--critical) !important; }
+.bg-accent { background: var(--accent) !important; }
+
+/* 점(●)이 살아 있음을 알리는 깜빡임 */
 @keyframes sf-pulse { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
 .dot-live { animation: sf-pulse 1.6s ease-in-out infinite; }
 .dot-busy { animation: sf-pulse .9s ease-in-out infinite; }
@@ -77,6 +135,12 @@ body {
 /* 인라인 SVG 차트는 폭을 컨테이너에 맞춘다. */
 svg.chart { display: block; width: 100%; height: auto; }
 
-/* `hidden` 속성이 Tailwind 의 display 유틸(flex/grid)에 밀리지 않게 못을 박는다.
-   예전에 `.regime[hidden]` 가 `display:flex` 에 져서 계속 보이던 버그가 있었다. */
+/* 페이지 폭 */
+.page-wrap { max-width: 1280px; }
+
+/* 종목 메뉴 버튼 (종목코드·종목명 셀) */
+button.stock { background: none; border: 0; padding: 0; font: inherit; color: inherit; cursor: pointer; }
+button.stock:hover { color: var(--accent); text-decoration: underline; }
+
+/* `hidden` 속성이 d-flex 같은 display 유틸에 밀리지 않게 못을 박는다. */
 [hidden] { display: none !important; }
