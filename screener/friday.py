@@ -43,7 +43,7 @@ import numpy as np
 import pandas as pd
 
 from .friday_backtest import regime_series
-from .supply import (DAILY_BARS, clean, continuous_bars, minute_offset, session_bars,
+from .intraday import (DAILY_BARS, clean, continuous_bars, minute_offset, session_bars,
                      tick_flow, vwap)
 
 log = logging.getLogger(__name__)

@@ -29,6 +29,7 @@ from .autobuy import AutoBuyer
 from .bollinger import BollingerConfig
 from .bollinger_bot import BollingerBot
 from .config import StrategyConfig
+from .friday import FridayConfig, FridayRecorder, FridayScanner, FridayService
 from .data_loader import TossDataLoader
 from .notifier import DedupeNotifier, EmailNotifier, MultiNotifier, TelegramNotifier, parse_emails
 from .scan_service import ScanService
@@ -135,6 +136,7 @@ class UserSession:
     service: ScanService
     trading: TradingService | None = None
     bollinger: BollingerBot | None = None
+    friday: FridayService | None = None
     # 이 세션을 만든 로그인 사용자. 로그인을 안 쓰는 서버면 None.
     # 웹은 쿠키의 세션이라도 owner 가 현재 로그인 사용자와 다르면 **쓰지 않는다**
     # (같은 브라우저에서 계정을 바꿔 로그인했을 때 남의 키·계좌로 주문하는 사고 방지).
@@ -149,6 +151,8 @@ class UserSession:
         self.service.stop()
         if self.bollinger is not None:
             self.bollinger.stop()
+        if self.friday is not None:
+            self.friday.stop()
 
     def info(self) -> dict:
         """화면에 돌려줄 정보. **secret 은 절대 포함하지 않는다.**"""
@@ -191,6 +195,9 @@ class SessionManager:
                  bollinger_log: Path | None = None,
                  idle_ttl: float = DEFAULT_IDLE_TTL,
                  max_sessions: int = DEFAULT_MAX_SESSIONS,
+                 friday_cfg: FridayConfig | None = None,
+                 friday_log: Path | None = None,
+                 friday_interval: int = 60,
                  mail: dict | None = None,
                  client_factory=TossClient):
         self.cfg = cfg
@@ -206,6 +213,9 @@ class SessionManager:
         self.bollinger_log = Path(bollinger_log) if bollinger_log else None
         self.idle_ttl = idle_ttl
         self.max_sessions = max_sessions
+        self.friday_cfg = friday_cfg or FridayConfig()
+        self.friday_log = Path(friday_log) if friday_log else None
+        self.friday_interval = friday_interval
         self._client_factory = client_factory
         self._sessions: dict[str, UserSession] = {}
         self._lock = threading.Lock()
@@ -262,6 +272,15 @@ class SessionManager:
               if self.bollinger_log else None)
         return order, bb
 
+    def friday_path(self, owner: str | None) -> Path | None:
+        """금요일 마감 신호 기록 파일. 로그인 사용자면 `<로그 폴더>/users/<아이디>/` 로 분리한다."""
+        if not self.friday_log:
+            return None
+        if not owner:
+            return self.friday_log
+        safe = re.sub(r"[^A-Za-z0-9_.\-]", "_", owner).lstrip(".") or "_"
+        return self.friday_log.parent / "users" / safe / self.friday_log.name
+
     def create(self, settings: SessionSettings, *, owner: str | None = None) -> UserSession:
         """자격증명을 검증하고 세션을 만든다. 기존 동일 세션은 호출부에서 먼저 drop 한다."""
         self.sweep()
@@ -313,12 +332,19 @@ class SessionManager:
                            notify=telegram.send_text if telegram else None,
                            log_path=bollinger_log)
 
+        # 금요일 마감 돌파 — 시세만 보고 주문과 무관하다. 기록 창(금요일 14:25~15:20)에만 촘촘히 돈다.
+        friday = FridayService(
+            FridayScanner(loader, self.friday_cfg, max_workers=self.workers,
+                          recorder=FridayRecorder(self.friday_path(owner))),
+            interval=self.friday_interval)
+
         sess = UserSession(sid=secrets.token_urlsafe(24), settings=settings,
                            client=client, service=service, trading=trading,
-                           bollinger=bot, owner=owner)
+                           bollinger=bot, friday=friday, owner=owner)
         with self._lock:
             self._sessions[sess.sid] = sess
         service.start()
+        friday.start()
         log.info("세션 시작 (%s%s, 상위 %d종목 · %d초 주기)",
                  mask(settings.client_id), f" · {owner}" if owner else "",
                  settings.top, settings.interval)

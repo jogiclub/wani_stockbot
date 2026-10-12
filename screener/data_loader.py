@@ -153,6 +153,98 @@ class TossDataLoader(DataLoader):
         return self._cached_json(f"warnings/{symbol}.json", 600.0,
                                  lambda: self.client.warnings(symbol)) or []
 
+    # -- 금요일 마감 돌파 (screener/friday.py) -------------------------------
+    def turnover_leaders(self, count: int = 100) -> list[tuple[str, float]]:
+        """당일 거래대금 상위 (종목코드, 누적 거래대금). 랭킹 API 상한 100."""
+        out = []
+        for item in self.client.rankings("MARKET_TRADING_AMOUNT", "KR", "1d", min(count, 100)):
+            sym = item.get("symbol")
+            if sym:
+                out.append((sym, _to_float(item.get("tradingAmount"))))
+        return out
+
+    def metas(self, symbols: list[str]) -> dict[str, StockMeta]:
+        """종목 메타를 한 번에 채운다 (이미 아는 종목은 다시 묻지 않는다)."""
+        missing = [s for s in symbols if s not in self._meta]
+        if missing:
+            for d in self.client.stocks(missing):
+                meta = StockMeta.from_toss(d)
+                self._meta[meta.symbol] = meta
+        return {s: self._meta[s] for s in symbols if s in self._meta}
+
+    def session_minutes(self, symbol: str, max_pages: int = 6) -> pd.DataFrame:
+        """가장 최근 정규장 하루치 1분봉 (09:00 ~ 판정 시각).
+
+        1분봉 응답에는 시간외(NXT 등) 봉이 섞여 오고 최신순이다. 정규장 봉이 있는
+        가장 최근 날짜를 찾고, 그날 09:00 이전까지 페이지를 넘겨 받는다.
+        """
+        from .intraday import SESSION_OPEN, session_bars
+
+        frames: list[pd.DataFrame] = []
+        before: str | None = None
+        session = None
+        for _ in range(max_pages):
+            page = self.client.candles_page(symbol, "1m", 200, before)
+            chunk = page.get("candles") or []
+            if not chunk:
+                break
+            df = candles_to_df(chunk)
+            frames.append(df)
+            if session is None:
+                reg = session_bars(df)
+                if not reg.empty:
+                    session = reg.index.max().date()
+            if session is not None and df.index.min() <= pd.Timestamp.combine(session, SESSION_OPEN):
+                break
+            before = page.get("nextBefore")
+            if not before:
+                break
+        if session is None or not frames:
+            return pd.DataFrame(columns=OHLCV_COLUMNS)
+        merged = pd.concat(frames).sort_index()
+        merged = merged[~merged.index.duplicated(keep="last")]
+        return session_bars(merged, session)
+
+    def minute_profile(self, symbol: str, day, minutes: int = 60) -> pd.Series:
+        """과거 영업일 `day` 의 09:00~09:00+minutes 1분 거래량 (index = 분 오프셋).
+
+        지나간 날의 분봉은 바뀌지 않으므로 파일로 영구 캐시한다.
+        """
+        from .intraday import minute_offset, session_bars
+
+        key = f"intraday/{symbol}_{day.isoformat()}_{minutes}.json"
+
+        def fetch():
+            end = pd.Timestamp.combine(day, pd.Timestamp("09:00").time()) + pd.Timedelta(minutes=minutes)
+            page = self.client.candles_page(symbol, "1m", 200,
+                                            end.strftime("%Y-%m-%dT%H:%M:59+09:00"))
+            df = session_bars(candles_to_df(page.get("candles") or []), day)
+            return [[minute_offset(ts), float(v)] for ts, v in df["volume"].items()
+                    if minute_offset(ts) <= minutes]
+
+        raw = self._cached_json(key, 10 * 365 * 86400, fetch) or []
+        return pd.Series({int(k): v for k, v in raw}, dtype=float).sort_index()
+
+    def price_at(self, symbol: str, day, minutes: int = 30) -> float:
+        """과거 영업일 `day` 의 09:00+minutes 분 시점 가격(그 시각까지 마지막 정규장 봉 종가).
+
+        금요일 마감 매매의 월요일 09:30 결과 채우기용. 지나간 날이라 영구 캐시한다.
+        봉이 없으면 NaN.
+        """
+        from .intraday import session_bars
+
+        key = f"intraday/{symbol}_{day.isoformat()}_px{minutes}.json"
+
+        def fetch():
+            end = pd.Timestamp.combine(day, pd.Timestamp("09:00").time()) + pd.Timedelta(minutes=minutes)
+            page = self.client.candles_page(symbol, "1m", 200,
+                                            end.strftime("%Y-%m-%dT%H:%M:59+09:00"))
+            df = session_bars(candles_to_df(page.get("candles") or []), day)
+            return float(df["close"].iloc[-1]) if not df.empty else None
+
+        raw = self._cached_json(key, 10 * 365 * 86400, fetch)
+        return float("nan") if raw is None else float(raw)
+
     def index_ohlcv(self, symbol: str = "KOSDAQ", count: int = 800) -> pd.DataFrame:
         """시장 지수 일봉 (시장 국면 필터용). 6시간 캐시."""
         raw = self._cached_json(f"index_{symbol}_{count}.json", 6 * 3600,

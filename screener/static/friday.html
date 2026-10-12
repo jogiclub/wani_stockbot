@@ -4,77 +4,106 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>금요일 마감 돌파 매매 · 왔니 주식</title>
-<script src="https://cdn.tailwindcss.com"></script>
-<script src="/static/ui.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css">
 <link rel="stylesheet" href="/static/common.css">
 <script src="/static/gnb.js"></script>
-<script src="/static/offcanvas.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/ag-grid-community@33.3.2/dist/ag-grid-community.min.js"></script>
+<script src="/static/ui.js"></script>
 <script src="/static/session.js"></script>
+<script src="/static/offcanvas.js"></script>
 <script src="/static/stockmenu.js"></script>
+<style>
+  .gtbl { --bs-table-bg: transparent; }
+  .gtbl th, .gtbl td { text-align: right; }
+  .gtbl th:first-child, .gtbl td:first-child, .gtbl .tl { text-align: left; }
+  .guide { line-height: 1.75; }
+  .guide p { margin-bottom: .6rem; color: var(--text-secondary); }
+  .guide code { background: var(--surface-2); padding: .1rem .4rem; border-radius: .25rem; }
+  .guide ul { padding-left: 1.25rem; margin-bottom: .6rem; }
+  .guide li { margin-bottom: .25rem; }
+  .callout { border-left: 3px solid var(--border); background: var(--surface-2); padding: .75rem 1rem;
+             border-radius: 0 .5rem .5rem 0; margin: .75rem 0; font-size: .875rem; }
+  .callout > b { display: block; margin-bottom: .25rem; }
+  .callout.bad { border-left-color: var(--critical); } .callout.warn { border-left-color: var(--warning); }
+  .callout.accent { border-left-color: var(--accent); }
+  .step { background: var(--surface-2); border-radius: .75rem; padding: .9rem 1rem; height: 100%; }
+  .step .n { font-size: .7rem; font-weight: 700; color: var(--accent); letter-spacing: .05em; }
+  .step h4 { font-size: .95rem; font-weight: 600; margin: .15rem 0 .4rem; }
+  .step ul { font-size: .8rem; color: var(--text-secondary); margin: 0; padding-left: 1rem; }
+  .chart-tip { position: absolute; pointer-events: none; opacity: 0; transition: opacity .1s; z-index: 5;
+               background: var(--surface-2); border: 1px solid var(--border); border-radius: .5rem;
+               padding: .4rem .6rem; font-size: .75rem; line-height: 1.5; white-space: nowrap;
+               box-shadow: 0 4px 14px rgba(0,0,0,.18); font-variant-numeric: tabular-nums; }
+  .chart-tip b { display: block; margin-bottom: 2px; }
+  .sub { display: block; font-size: .7rem; color: var(--text-muted); font-weight: 400; }
+  .legend { display: flex; flex-wrap: wrap; gap: .9rem; font-size: .75rem; color: var(--text-secondary); margin: 2px 0 6px; }
+  .sw { display: inline-block; width: 14px; height: 3px; border-radius: 2px; margin-right: 5px; vertical-align: 3px; }
+  .sw.dash { height: 0; border-top: 2px dashed; background: none !important; }
+</style>
 </head>
-<body class="font-sans text-sm leading-normal antialiased">
+<body>
 <div data-gnb="friday"></div>
 
 <!-- GNB 우측으로 옮겨질 공통 컨트롤 (gnb.js 가 이동시킨다) -->
-<span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold
-             bg-s2 text-txt2 border border-line" id="status" data-gnb-action>
-  <span class="w-[7px] h-[7px] rounded-full bg-txt3" id="status-dot"></span>
+<span class="badge rounded-pill d-inline-flex align-items-center gap-1 bg-s2 text-body-secondary border border-line fw-semibold" id="status" data-gnb-action>
+  <span class="d-inline-block rounded-circle bg-secondary" style="width:7px;height:7px" id="status-dot"></span>
   <span id="status-text">연결 중…</span></span>
-<button data-settings-btn title="내 토스 API 키 설정" data-gnb-action hidden>⚙ 설정</button>
+<button data-settings-btn data-gnb-action hidden>⚙ 설정</button>
 
-<div class="max-w-page mx-auto px-5 pt-5 pb-14">
-  <div class="flex flex-wrap gap-3 items-center mb-4">
-    <h1 class="m-0 text-[19px] font-semibold tracking-tight">금요일 마감 돌파 매매
-      <span class="text-txt3 font-normal text-[13px] ml-2" id="mode-label"></span></h1>
-    <div class="flex-1"></div>
-    <button class="font-sans text-sm rounded-lg border border-transparent bg-accent text-white font-semibold px-3.5 py-1.5 hover:brightness-110 disabled:opacity-50 disabled:cursor-not-allowed" id="scan-btn">지금 스캔</button>
+<div class="page-wrap mx-auto px-3 pt-4 pb-5">
+  <div class="d-flex flex-wrap gap-3 align-items-center mb-3">
+    <h1 class="m-0 fs-4 fw-semibold">금요일 마감 돌파 매매
+      <span class="text-body-tertiary fw-normal small ms-2" id="mode-label"></span></h1>
+    <div class="flex-grow-1"></div>
+    <button class="btn btn-sm btn-primary fw-semibold" id="scan-btn">지금 스캔</button>
   </div>
 
-  <div class="tint-warn border border-warn px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]">
+  <div class="alert tint-warn border border-warn py-2 px-3 mb-3 small">
     <b>검증 중인 전략입니다 — 주문을 내지 않는 관찰 전용.</b>
     일봉 대리 백테스트는 <b>조건부</b>(총수익은 대조군보다 높지만 비용을 빼면 손익분기 근처)였고, 분봉 성과는
     매주 금요일 신호를 기록해 쌓는 중입니다. 표본이 100건을 넘기 전에는 실주문을 검토하지 않습니다.
   </div>
 
-  <div id="setup" hidden></div>
-  <div id="err" class="tint-bad border border-bad px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
-  <div id="closed" class="bg-s1 border border-line px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px] text-txt2" hidden></div>
-  <div id="blocked" class="tint-warn border border-warn px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]" hidden></div>
+  <div id="err" class="alert tint-bad border border-bad py-2 px-3 mb-3 small" hidden></div>
+  <div id="closed" class="alert bg-s1 border border-line py-2 px-3 mb-3 small text-body-secondary" hidden></div>
+  <div id="blocked" class="alert tint-warn border border-warn py-2 px-3 mb-3 small" hidden></div>
 
-  <section class="grid grid-cols-[repeat(auto-fit,minmax(140px,1fr))] gap-2.5 mb-4" aria-label="요약">
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">🔥 진입 적합</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-entry">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">후보 (급증+돌파)</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-cand">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">판정 대상</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-scanned">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">시장 국면 (지수 vs MA20)</div>
-      <div class="text-[15px] font-semibold leading-snug" id="t-regime">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">이번 서버 기록</div>
-      <div class="text-[26px] font-semibold tracking-tight tabular-nums" id="t-rec">–</div></div>
-    <div class="bg-s1 border border-line rounded-xl px-4 py-3.5">
-      <div class="text-xs text-txt3 mb-1">마지막 스캔</div>
-      <div class="text-[17px] font-semibold tabular-nums" id="t-last">–</div></div>
+  <section class="row g-2 mb-3" aria-label="요약">
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">🔥 진입 적합</div>
+      <div class="fs-3 fw-semibold tnum" id="t-entry">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">후보 (급증+돌파)</div>
+      <div class="fs-3 fw-semibold tnum" id="t-cand">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">판정 대상</div>
+      <div class="fs-3 fw-semibold tnum" id="t-scanned">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">시장 국면 (지수 vs MA20)</div>
+      <div class="fs-6 fw-semibold lh-sm" id="t-regime">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">이번 서버 기록</div>
+      <div class="fs-3 fw-semibold tnum" id="t-rec">–</div></div></div>
+    <div class="col-6 col-md-4 col-xl-2"><div class="card card-body px-3 py-3">
+      <div class="small text-body-tertiary mb-1">마지막 스캔</div>
+      <div class="fs-5 fw-semibold tnum" id="t-last">–</div></div></div>
   </section>
 
-  <div class="flex gap-1 border-b border-line mb-3.5 flex-wrap" role="tablist">
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="list" aria-selected="true">포착 종목<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-list">0</span></button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="report" aria-selected="false">포워드 기록<span class="ml-1.5 px-1.5 py-px rounded-full bg-s2 text-[11px] text-txt2 inline-block" id="c-report">0</span></button>
-    <button class="tab px-3.5 py-2 bg-transparent border-0 border-b-2 border-transparent rounded-none text-txt2 font-medium hover:text-txt aria-selected:text-txt aria-selected:border-accent aria-selected:font-bold" role="tab" data-tab="guide" aria-selected="false">가이드 · 근거</button>
+  <div class="nav nav-tabs mb-3" role="tablist">
+    <button class="nav-link tab active" role="tab" data-tab="list" aria-selected="true">포착 종목<span class="badge rounded-pill bg-s2 text-body-secondary ms-1" id="c-list">0</span></button>
+    <button class="nav-link tab" role="tab" data-tab="report" aria-selected="false">포워드 기록<span class="badge rounded-pill bg-s2 text-body-secondary ms-1" id="c-report">0</span></button>
+    <button class="nav-link tab" role="tab" data-tab="guide" aria-selected="false">가이드 · 근거</button>
   </div>
 
   <div id="view"></div>
-  <div id="detail"></div>
+  <div id="detail" data-oc="bottom"></div>
 
-  <footer class="mt-6 text-xs text-txt3 text-center">투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 백테스트로 검증되지 않은 전략입니다 · 주문하지 않습니다 · 데이터: 토스증권 OpenAPI</footer>
+  <footer class="mt-4 small text-body-tertiary text-center">투자 판단의 참고 자료이며 수익을 보장하지 않습니다. · 백테스트로 검증되지 않은 전략입니다 · 주문하지 않습니다 · 데이터: 토스증권 OpenAPI</footer>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
 const fmt = (n, d = 0) => n == null || Number.isNaN(n) ? "–" :
@@ -91,14 +120,12 @@ let STATE = null, TAB = TABS.includes(URLQ.get("tab")) ? URLQ.get("tab") : "list
     FILTER = "전체", SELECTED = null, CHART = null, LAST_SCAN = null,
     REPORT = null, REPORT_AT = 0, EVIDENCE = null;
 
-const ST_BASE = "inline-block px-2.5 py-0.5 rounded-full text-xs font-bold border";
-const ENTER_BADGE = `<span class="${ST_BASE} bg-good border-good !text-white">🔥 진입</span>`;
-const CAND_BADGE = `<span class="${ST_BASE} tint-accent border-accent">후보</span>`;
-const SUB = "block text-[11px] text-txt3 font-normal";
-const bar = (pct) => `<div class="h-[5px] rounded-[3px] bg-s2 overflow-hidden min-w-[64px] mt-[3px]">
-  <i class="block h-full bg-accent" style="width:${Math.max(0, Math.min(100, pct))}%"></i></div>`;
-const EMPTY = (text) => `<div class="py-12 px-5 text-center text-txt3 leading-[1.7]">${text}</div>`;
-const upDown = (v) => v == null ? "" : v >= 0 ? "text-up font-semibold" : "text-down font-semibold";
+const ENTER_BADGE = `<span class="badge rounded-pill bg-good text-white">🔥 진입</span>`;
+const CAND_BADGE = `<span class="badge rounded-pill tint-accent text-accent border border-accent">후보</span>`;
+const bar = (pct) => `<div class="progress mt-1" style="height:5px;min-width:64px;background:var(--surface-2)">
+  <div class="progress-bar bg-accent" style="width:${Math.max(0, Math.min(100, pct))}%"></div></div>`;
+const EMPTY = (text) => `<div class="py-5 px-4 text-center text-body-tertiary" style="line-height:1.7">${text}</div>`;
+const upDown = (v) => v == null ? "" : v >= 0 ? "text-up fw-semibold" : "text-down fw-semibold";
 
 document.addEventListener("themechange", () => { if (SELECTED && CHART) drawCharts(CHART, SELECTED); });
 let RESIZE_T = null, LAST_W = window.innerWidth;
@@ -120,14 +147,15 @@ async function refresh() {
   }
 }
 
-const DOT = { live: "bg-good dot-live", busy: "bg-warn dot-busy", err: "bg-bad", warn: "bg-warn", "": "bg-txt3" };
+const DOT = { live: "bg-good dot-live", busy: "bg-warn dot-busy", err: "bg-bad", warn: "bg-warn", "": "bg-secondary" };
 function setStatus(kind, text) {
-  $("#status-dot").className = `w-[7px] h-[7px] rounded-full ${DOT[kind] || DOT[""]}`;
+  $("#status-dot").className = `d-inline-block rounded-circle ${DOT[kind] || DOT[""]}`;
   $("#status-text").textContent = text;
 }
 
 const regimeText = (v) => v === true ? "우호" : v === false ? "이탈" : "미확인";
-const regimeTone = (v) => v === true ? "text-good" : v === false ? "text-bad" : "text-txt3";
+const regimeTone = (v) => v === true ? "text-good" : v === false ? "text-bad" : "text-body-tertiary";
+const unitSmall = (u) => `<small class="fs-6 fw-medium text-body-tertiary ms-1">${u}</small>`;
 
 function paint() {
   const s = STATE;
@@ -142,8 +170,7 @@ function paint() {
     $("#detail").innerHTML = "";
     if (TAB === "list") {
       dropGrid(); VIEW_KIND = null;
-      $("#view").innerHTML = `<div class="bg-s1 border border-line rounded-xl">${
-        EMPTY("토스증권 API 키를 등록하면 금요일 마감 스캔이 시작됩니다.")}</div>`;
+      $("#view").innerHTML = `<div class="card">${EMPTY("토스증권 API 키를 등록하면 금요일 마감 스캔이 시작됩니다.")}</div>`;
     } else renderTab();
     return;
   }
@@ -154,14 +181,13 @@ function paint() {
   $("#mode-label").textContent =
     `거래대금 상위 ${c.candidates}종목 · 기록 창 ${c.window_start}~${c.window_end} · ${s.interval}초 주기` +
     (s.session ? ` · 기준일 ${s.session}` : "");
-  const unit = `<small class="text-[13px] font-medium text-txt3 ml-[3px]">종목</small>`;
-  $("#t-entry").innerHTML = fmt(s.signals.filter(x => x["진입"]).length) + unit;
-  $("#t-cand").innerHTML = fmt(s.signals.length) + unit;
-  $("#t-scanned").innerHTML = fmt(s.scanned) + unit;
+  $("#t-entry").innerHTML = fmt(s.signals.filter(x => x["진입"]).length) + unitSmall("종목");
+  $("#t-cand").innerHTML = fmt(s.signals.length) + unitSmall("종목");
+  $("#t-scanned").innerHTML = fmt(s.scanned) + unitSmall("종목");
   const rg = s.regimes || {};
   $("#t-regime").innerHTML = ["KOSPI", "KOSDAQ"].map(m =>
     `${m} <b class="${regimeTone(rg[m])}">${regimeText(rg[m])}</b>`).join("<br>");
-  $("#t-rec").innerHTML = fmt(s.recorded) + `<small class="text-[13px] font-medium text-txt3 ml-[3px]">건</small>`;
+  $("#t-rec").innerHTML = fmt(s.recorded) + unitSmall("건");
   $("#t-last").textContent = s.finished_at ? s.finished_at.slice(11) : (busy ? "첫 스캔 중…" : "–");
   $("#c-list").textContent = s.signals.length;
   $("#scan-btn").disabled = s.running;
@@ -188,16 +214,20 @@ function paint() {
     const now = s.signals.find(x => x["종목코드"] === SELECTED["종목코드"]);
     if (now) select(now, true);
   }
-  if (!SELECTED && s.signals.length && TAB === "list") select(s.signals[0]);
 }
 
 /* ------------------------------------------------------------------ 탭 */
 document.querySelectorAll(".tab").forEach(btn => {
-  btn.setAttribute("aria-selected", String(btn.dataset.tab === TAB));
+  const on = btn.dataset.tab === TAB;
+  btn.classList.toggle("active", on);
+  btn.setAttribute("aria-selected", String(on));
   btn.onclick = () => {
     TAB = btn.dataset.tab;
-    document.querySelectorAll(".tab").forEach(b => b.setAttribute("aria-selected", String(b === btn)));
-    $("#detail").hidden = TAB !== "list";
+    document.querySelectorAll(".tab").forEach(b => {
+      b.classList.toggle("active", b === btn);
+      b.setAttribute("aria-selected", String(b === btn));
+    });
+    if (TAB !== "list") $("#detail").hidden = true;
     renderTab();
   };
 });
@@ -227,21 +257,17 @@ function dropGrid() {
   if (GRID) { GRID.destroy(); GRID = null; }
   if (GRID2) { GRID2.destroy(); GRID2 = null; }
 }
-
 function gridHost(sel, id = "grid") {
-  $(sel).innerHTML = `<div id="${id}" class="grid-clickable w-full h-[min(60vh,560px)]"></div>`;
+  $(sel).innerHTML = `<div id="${id}" class="grid-clickable w-100" style="height:min(60vh,560px)"></div>`;
   return $("#" + id);
 }
-
-const ROW_CLASS = { "!bg-s2": (p) => !!SELECTED && p.data && SELECTED["종목코드"] === p.data["종목코드"] };
-const CHIP = "px-2.5 py-1 text-[12.5px] rounded-full border border-line bg-s1 text-txt " +
-             "hover:bg-s2 aria-pressed:bg-txt aria-pressed:text-s1 aria-pressed:border-transparent";
+const ROW_CLASS = { "bg-s2": (p) => !!SELECTED && p.data && SELECTED["종목코드"] === p.data["종목코드"] };
 
 function renderChips(all) {
   const cnt = (f) => f === "전체" ? all.length : all.filter(r => r["진입"]).length;
   $("#filters").innerHTML = ["전체", "진입"].map(f => {
-    const on = f === "진입" && f !== FILTER ? "!border-good !text-good" : "";
-    return `<button class="${CHIP} ${on}" data-f="${f}" aria-pressed="${f === FILTER}">${f} ${cnt(f)}</button>`;
+    const on = f === FILTER;
+    return `<button class="btn btn-sm rounded-pill ${on ? "btn-dark" : "btn-outline-secondary"} ${f === "진입" && !on ? "border-good text-good" : ""}" data-f="${f}">${f} ${cnt(f)}</button>`;
   }).join("");
   $("#filters").querySelectorAll("button").forEach(b => b.onclick = () => { FILTER = b.dataset.f; renderList(); });
 }
@@ -251,35 +277,34 @@ function listColumns() {
   return [
     { colId: "상태", headerName: "상태", headerTooltip: TIPS["상태"], minWidth: 104,
       valueGetter: (p) => p.data["진입"] ? 1 : 0,
-      cellRenderer: (p) => `<div class="leading-tight">${p.data["진입"] ? ENTER_BADGE : CAND_BADGE}
-        <span class="${SUB}">${esc(p.data["판정시각"])}</span></div>` },
+      cellRenderer: (p) => `<div class="lh-sm">${p.data["진입"] ? ENTER_BADGE : CAND_BADGE}
+        <span class="sub">${esc(p.data["판정시각"])}</span></div>` },
     { field: "점수", headerTooltip: TIPS["점수"], minWidth: 104,
-      cellRenderer: (p) => `<div class="leading-tight"><b class="text-base font-bold tabular-nums">${p.value}</b>${bar(p.value)}</div>` },
-    { field: "종목코드", minWidth: 110, cellRenderer: (p) => StockMenu.link(p.data, p.value, "font-semibold") },
+      cellRenderer: (p) => `<div class="lh-sm"><b class="fs-6 tnum">${p.value}</b>${bar(p.value)}</div>` },
+    { field: "종목코드", minWidth: 110, cellRenderer: (p) => StockMenu.link(p.data, p.value, "fw-semibold") },
     { field: "종목명", minWidth: 150, cellRenderer: (p) =>
         StockMenu.link(p.data, p.value) + (p.data["유의사항"] || []).slice(0, 1).map(t =>
-          `<span class="ml-1.5 px-1.5 py-px rounded-full text-[11px] font-semibold tint-warn"
-                 title="${esc(t)}">${esc(t.split(" — ")[0].slice(0, 12))}</span>`).join("") },
+          `<span class="badge rounded-pill tint-warn text-body ms-1" title="${esc(t)}">${esc(t.split(" — ")[0].slice(0, 12))}</span>`).join("") },
     { field: "현재가", type: "numericColumn", minWidth: 96, valueFormatter: (p) => fmt(p.value) },
     { field: "등락률%", headerName: "등락률", type: "numericColumn", minWidth: 96,
-      cellClass: (p) => "tabular-nums " + upDown(p.value), valueFormatter: (p) => signed(p.value) + "%" },
+      cellClass: (p) => "tnum " + upDown(p.value), valueFormatter: (p) => signed(p.value) + "%" },
     { field: "급증배수", headerName: "창 급증", headerTooltip: TIPS["급증"], type: "numericColumn", minWidth: 100,
-      cellRenderer: (p) => `<div class="leading-tight"><b>${fmt(p.value, 1)}배</b>
-        <span class="${SUB}">${p.data["급증기준일"]}일 평균 대비</span></div>` },
+      cellRenderer: (p) => `<div class="lh-sm"><b>${fmt(p.value, 1)}배</b>
+        <span class="sub">${p.data["급증기준일"]}일 평균 대비</span></div>` },
     { colId: "break", headerName: "돌파선 대비", headerTooltip: TIPS["돌파선"], type: "numericColumn", minWidth: 110,
       valueGetter: (p) => pctOf(p.data["현재가"], p.data["돌파선"]),
-      cellClass: (p) => "tabular-nums " + upDown(p.value), valueFormatter: (p) => signed(p.value, 2) + "%" },
+      cellClass: (p) => "tnum " + upDown(p.value), valueFormatter: (p) => signed(p.value, 2) + "%" },
     { field: "거래대금", headerTooltip: TIPS["거래대금"], type: "numericColumn", minWidth: 104,
       valueFormatter: (p) => eok(p.value) },
     { field: "매수비중%", headerName: "매수비중", headerTooltip: TIPS["매수비중"], type: "numericColumn", minWidth: 104,
-      cellClass: (p) => "tabular-nums " + upDown(p.value - (c.buy_ratio_min || 0) * 100),
+      cellClass: (p) => "tnum " + upDown(p.value - (c.buy_ratio_min || 0) * 100),
       valueFormatter: (p) => fmt(p.value, 1) + "%" },
     { colId: "vwap", headerName: "VWAP 대비", headerTooltip: TIPS["VWAP 대비"], type: "numericColumn", minWidth: 110,
       valueGetter: (p) => pctOf(p.data["현재가"], p.data["VWAP"]),
-      cellClass: (p) => "tabular-nums " + upDown(p.value), valueFormatter: (p) => signed(p.value) + "%" },
+      cellClass: (p) => "tnum " + upDown(p.value), valueFormatter: (p) => signed(p.value) + "%" },
     { field: "주간변동폭%", headerName: "직전 변동폭", headerTooltip: TIPS["조용한 한 주"], type: "numericColumn", minWidth: 116,
-      cellRenderer: (p) => `<div class="leading-tight ${p.data["체크"]["조용한한주"] ? "" : "text-warn"}">${fmt(p.value, 1)}%
-        <span class="${SUB}">거래량 ${fmt(p.data["주간거래량비"], 1)}배</span></div>` },
+      cellRenderer: (p) => `<div class="lh-sm ${p.data["체크"]["조용한한주"] ? "" : "text-warn"}">${fmt(p.value, 1)}%
+        <span class="sub">거래량 ${fmt(p.data["주간거래량비"], 1)}배</span></div>` },
     { field: "고점경과분", headerName: "고점 후", headerTooltip: TIPS["고점경과"], type: "numericColumn", minWidth: 90,
       valueFormatter: (p) => fmt(p.value) + "분" },
   ];
@@ -292,16 +317,16 @@ function renderList() {
     dropGrid();
     VIEW_KIND = "list";
     $("#view").innerHTML =
-      `<div id="filters" class="flex flex-wrap gap-1.5 mb-2.5" role="group" aria-label="필터"></div><div id="list-body"></div>`;
+      `<div id="filters" class="d-flex flex-wrap gap-1 mb-2" role="group" aria-label="필터"></div><div id="list-body"></div>`;
   }
   renderChips(all);
   if (!rows.length) {
     dropGrid();
     const c = STATE.config || {};
     const empty = STATE.finished_at
-      ? `포착된 종목이 없습니다.<br><span class="text-txt3">${esc(c.window_start)} 이후 거래량이 평소 같은 구간의 ${fmt(c.surge_min, 1)}배 이상 몰리면서 창 이전 당일 고점을 넘은 종목만 표시됩니다.</span>`
+      ? `포착된 종목이 없습니다.<br><span class="text-body-tertiary">${esc(c.window_start)} 이후 거래량이 평소 같은 구간의 ${fmt(c.surge_min, 1)}배 이상 몰리면서 창 이전 당일 고점을 넘은 종목만 표시됩니다.</span>`
       : "첫 스캔 중입니다… (과거 분봉을 처음 모을 때는 수십 초 걸립니다)";
-    $("#list-body").innerHTML = `<div class="bg-s1 border border-line rounded-xl">${EMPTY(empty)}</div>`;
+    $("#list-body").innerHTML = `<div class="card">${EMPTY(empty)}</div>`;
     return;
   }
   if (!GRID) {
@@ -334,99 +359,72 @@ async function select(r, quiet = false) {
   }
 }
 
-const MARK = "w-[1.2em] flex-none text-center";
-const mark = v => v === true ? `<b class="${MARK} text-good" aria-label="충족">✓</b>`
-  : v === false ? `<b class="${MARK} text-bad" aria-label="미충족">✕</b>`
-  : `<b class="${MARK} text-txt3" aria-label="확인 필요">?</b>`;
-const BD = {
-  t: "w-full mt-1",
-  c1: "py-1 pr-2 align-top text-txt2 w-[140px] max-[520px]:w-auto",
-  c2: "py-1 pr-2 align-top w-20 max-[520px]:w-12",
-  c3: "py-1 pr-3.5 align-top font-semibold w-[72px] text-right whitespace-nowrap",
-  c4: "py-1 pr-2 align-top text-txt3 text-xs max-[520px]:hidden",
-};
+const mark = v => v === true ? `<b class="text-good d-inline-block text-center" style="width:1.2em" aria-label="충족">✓</b>`
+  : v === false ? `<b class="text-bad d-inline-block text-center" style="width:1.2em" aria-label="미충족">✕</b>`
+  : `<b class="text-body-tertiary d-inline-block text-center" style="width:1.2em" aria-label="확인 필요">?</b>`;
 
 function renderDetail(r) {
   const k = r["체크"] || {}, c = STATE.config || {};
-  const item = (ok, text) => `<li class="flex gap-1.5 mb-1 text-txt2">${mark(ok)}<span>${text}</span></li>`;
+  const item = (ok, text) => `<li class="d-flex gap-1 mb-1 text-body-secondary">${mark(ok)}<span>${text}</span></li>`;
   const vw = pctOf(r["현재가"], r["VWAP"]), bk = pctOf(r["현재가"], r["돌파선"]);
-  const CARD = "bg-s2 rounded-[10px] px-3.5 py-3";
-  const CARD_N = "text-[11px] font-bold text-accent tracking-[.05em]";
-  const CARD_H = "mt-0.5 mb-2 text-sm font-semibold";
-  const CARD_UL = "list-none m-0 p-0 text-[12.5px]";
-  const H3 = "text-[13px] m-0 mb-1.5 text-txt2 font-semibold";
+  const card = (n, h, items) => `<div class="col-12 col-md-6 col-xl-3"><div class="step">
+      <div class="n">${n}</div><h4>${h}</h4><ul class="list-unstyled m-0 small">${items.join("")}</ul></div></div>`;
   const rg = r["국면"];
-  $("#detail").hidden = TAB !== "list";
-  $("#detail").innerHTML = `<section class="mt-3.5 bg-s1 border border-line rounded-xl p-4" aria-label="${esc(r["종목명"])} 상세">
-    <div class="flex flex-wrap items-center gap-2.5">
-      <h2 class="m-0 text-[17px] font-semibold">${esc(r["종목명"])}
-        <span class="text-txt3 font-normal tabular-nums">${esc(r["종목코드"])}</span></h2>
+  $("#detail").hidden = false;
+  $("#detail").innerHTML = `<div class="mt-3 card card-body p-3" aria-label="${esc(r["종목명"])} 상세">
+    <div data-oc-head class="d-flex flex-wrap align-items-baseline gap-2">
+      <h2 class="m-0 fs-5 fw-semibold">${esc(r["종목명"])}
+        <span class="text-body-tertiary fw-normal tnum">${esc(r["종목코드"])}</span></h2>
       ${r["진입"] ? ENTER_BADGE : CAND_BADGE}
-      <span class="text-txt3 text-xs">${esc(r["기준일"])} ${esc(r["판정시각"])} 기준 · ${r["점수"]}점 · ${esc(r["시장"])}</span>
-      <div class="flex-1"></div>
-      <a class="text-xs px-2.5 py-1 rounded-lg border border-line bg-s2 text-txt2 no-underline hover:border-accent hover:text-accent"
-         href="${StockMenu.tossUrl(r["종목코드"])}" target="_blank" rel="noopener noreferrer">토스에서 뉴스·공시 확인 ↗</a>
+      <span class="text-body-tertiary small">${esc(r["기준일"])} ${esc(r["판정시각"])} 기준 · ${r["점수"]}점 · ${esc(r["시장"])}</span>
+      <a class="btn btn-sm btn-outline-secondary" href="${StockMenu.tossUrl(r["종목코드"])}" target="_blank" rel="noopener noreferrer">토스에서 뉴스·공시 확인 ↗</a>
     </div>
 
-    <div class="${r["진입"] ? "tint-good border-good" : "bg-s2 border-line"} border rounded-[10px] px-3.5 py-2.5 mt-3.5 text-[13px]">
+    <div class="${r["진입"] ? "tint-good border-good" : "bg-s2 border-line"} border rounded-3 px-3 py-2 mt-2 small">
       <b>${r["진입"] ? "🔥 진입 적합 — 모든 조건을 통과했습니다" : "후보 — 진입 조건 일부 미충족"}</b>
-      <span class="text-txt3"> (주말 뉴스·공시는 사람이 직접 확인 · 주문하지 않음)</span>
-      <div class="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">${(r["진입근거"] || []).map(e =>
-        `<span class="inline-flex items-center gap-1">${mark(e["충족"])}<span class="${e["충족"] ? "" : "text-txt3"}">${esc(e["항목"])}</span></span>`).join("")}</div>
+      <span class="text-body-tertiary"> (주말 뉴스·공시는 사람이 직접 확인 · 주문하지 않음)</span>
+      <div class="d-flex flex-wrap column-gap-3 row-gap-1 mt-1">${(r["진입근거"] || []).map(e =>
+        `<span class="d-inline-flex align-items-center gap-1">${mark(e["충족"])}<span class="${e["충족"] ? "" : "text-body-tertiary"}">${esc(e["항목"])}</span></span>`).join("")}</div>
     </div>
 
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-2.5 my-3.5">
-      <div class="${CARD}"><div class="${CARD_N}">STEP 1 · 직전 ${fmt(c.quiet_days)}영업일</div>
-        <h4 class="${CARD_H}">조용한 한 주</h4><ul class="${CARD_UL}">
-        ${item(k["조용한한주"], `변동폭 <b class="font-semibold">${fmt(r["주간변동폭%"], 1)}%</b> (상한 ${fmt(c.quiet_range_max * 100)}%)`)}
-        ${item(k["조용한한주"], `평균 거래량 20일 평균의 ${fmt(r["주간거래량비"], 2)}배 (상한 ${fmt(c.quiet_vol_max, 1)}배)`)}
-        ${item(null, r["주간고점돌파"] ? "직전 주 최고가도 상향 돌파" : "직전 주 최고가는 아직 못 넘음")}
-      </ul></div>
-      <div class="${CARD}"><div class="${CARD_N}">STEP 2 · ${esc(c.window_start)} 이후</div>
-        <h4 class="${CARD_H}">거래량 급증 + 고점 돌파</h4><ul class="${CARD_UL}">
-        ${item(true, `창 거래량 평소의 <b class="font-semibold">${fmt(r["급증배수"], 1)}배</b> (${r["급증기준일"]}일 평균)`)}
-        ${item(true, `창 이전 고점 ${fmt(r["돌파선"])} 돌파 (${signed(bk, 2)}%)`)}
-        ${item(k["고점부근"], `당일 고가 ${fmt(r["당일고가"])} 부근 유지 · 고가 후 ${fmt(r["고점경과분"])}분`)}
-      </ul></div>
-      <div class="${CARD}"><div class="${CARD_N}">STEP 3 · 최근 ${fmt(c.flow_window)}분</div>
-        <h4 class="${CARD_H}">수급</h4><ul class="${CARD_UL}">
-        ${item(k["매수우위"], `매수 추정 비중 ${fmt(r["매수비중%"], 1)}% (기준 ${fmt(c.buy_ratio_min * 100)}%)`)}
-        ${item(k["VWAP위"], `VWAP ${fmt(r["VWAP"])} (${signed(vw)}%)`)}
-        ${item(null, `거래량 추세 ${r["거래량추세"] == null ? "–" : fmt(r["거래량추세"] * 100) + "%"} (직전 ${fmt(c.flow_window)}분 대비)`)}
-      </ul></div>
-      <div class="${CARD}"><div class="${CARD_N}">STEP 4 · 시장</div>
-        <h4 class="${CARD_H}">국면과 과열</h4><ul class="${CARD_UL}">
-        ${item(rg === null ? null : rg, `${esc(r["시장"])} 지수 ${regimeText(rg)} (MA${fmt(c.regime_ma)})`)}
-        ${item(k["과열아님"], `당일 ${signed(r["등락률%"])}% ${k["과열아님"] ? "" : "— 상한가 추격 위험"}`)}
-        ${item(null, "금요일 야간 미국장·주말 뉴스는 통제 불가 — 월요일 시초 갭하락 위험")}
-      </ul></div>
+    <div class="row g-2 my-2">
+      ${card(`STEP 1 · 직전 ${fmt(c.quiet_days)}영업일`, "조용한 한 주", [
+        item(k["조용한한주"], `변동폭 <b>${fmt(r["주간변동폭%"], 1)}%</b> (상한 ${fmt(c.quiet_range_max * 100)}%)`),
+        item(k["조용한한주"], `평균 거래량 20일 평균의 ${fmt(r["주간거래량비"], 2)}배 (상한 ${fmt(c.quiet_vol_max, 1)}배)`),
+        item(null, r["주간고점돌파"] ? "직전 주 최고가도 상향 돌파" : "직전 주 최고가는 아직 못 넘음")])}
+      ${card(`STEP 2 · ${esc(c.window_start)} 이후`, "거래량 급증 + 고점 돌파", [
+        item(true, `창 거래량 평소의 <b>${fmt(r["급증배수"], 1)}배</b> (${r["급증기준일"]}일 평균)`),
+        item(true, `창 이전 고점 ${fmt(r["돌파선"])} 돌파 (${signed(bk, 2)}%)`),
+        item(k["고점부근"], `당일 고가 ${fmt(r["당일고가"])} 부근 유지 · 고가 후 ${fmt(r["고점경과분"])}분`)])}
+      ${card(`STEP 3 · 최근 ${fmt(c.flow_window)}분`, "수급", [
+        item(k["매수우위"], `매수 추정 비중 ${fmt(r["매수비중%"], 1)}% (기준 ${fmt(c.buy_ratio_min * 100)}%)`),
+        item(k["VWAP위"], `VWAP ${fmt(r["VWAP"])} (${signed(vw)}%)`),
+        item(null, `거래량 추세 ${r["거래량추세"] == null ? "–" : fmt(r["거래량추세"] * 100) + "%"} (직전 ${fmt(c.flow_window)}분 대비)`)])}
+      ${card("STEP 4 · 시장", "국면과 과열", [
+        item(rg === null ? null : rg, `${esc(r["시장"])} 지수 ${regimeText(rg)} (MA${fmt(c.regime_ma)})`),
+        item(k["과열아님"], `당일 ${signed(r["등락률%"])}% ${k["과열아님"] ? "" : "— 상한가 추격 위험"}`),
+        item(null, "금요일 야간 미국장·주말 뉴스는 통제 불가 — 월요일 시초 갭하락 위험")])}
     </div>
 
     ${(r["유의사항"] || []).length
-      ? `<div class="tint-warn border border-warn px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]">${r["유의사항"].map(esc).join(" · ")}</div>` : ""}
+      ? `<div class="alert tint-warn border border-warn py-2 px-3 mb-2 small">${r["유의사항"].map(esc).join(" · ")}</div>` : ""}
 
-    <div id="charts" class="grid gap-3.5 mt-3.5">${EMPTY("차트 불러오는 중…")}</div>
+    <div id="charts" class="d-grid gap-3 mt-2">${EMPTY("차트 불러오는 중…")}</div>
 
     <div class="mt-3">
-      <h3 class="${H3}">점수 구성 <span class="text-txt3 font-normal">(경험칙 · 미검증)</span></h3>
-      <table class="${BD.t}"><tbody>${(r["점수상세"] || []).map(d => `<tr>
-        <td class="${BD.c1}">${esc(d["요인"])}</td>
-        <td class="${BD.c2}">${d["만점"] ? bar(Math.max(0, d["점수"]) / d["만점"] * 100) : ""}</td>
-        <td class="${BD.c3}">${d["점수"]} / ${d["만점"]}</td>
-        <td class="${BD.c4}">${esc(d["설명"])}</td></tr>`).join("")}</tbody></table>
+      <h3 class="fs-6 fw-semibold text-body-secondary mb-1">점수 구성 <span class="text-body-tertiary fw-normal">(경험칙 · 미검증)</span></h3>
+      <table class="table table-sm table-borderless align-middle mb-0" style="--bs-table-bg:transparent"><tbody>${(r["점수상세"] || []).map(d => `<tr>
+        <td class="text-body-secondary" style="width:140px">${esc(d["요인"])}</td>
+        <td style="width:90px">${d["만점"] ? bar(Math.max(0, d["점수"]) / d["만점"] * 100) : ""}</td>
+        <td class="fw-semibold tnum" style="width:76px">${d["점수"]} / ${d["만점"]}</td>
+        <td class="text-body-tertiary small">${esc(d["설명"])}</td></tr>`).join("")}</tbody></table>
     </div>
-  </section>`;
+  </div>`;
   if (CHART && CHART.symbol === r["종목코드"]) drawCharts(CHART, r);
 }
 
 /* ------------------------------------------------------------------ 차트 */
 const widthOf = (el) => Math.max(300, Math.round(el.clientWidth || 600));
-const TIP_CLS = "absolute pointer-events-none opacity-0 transition-opacity duration-100 " +
-  "bg-s2 border border-line rounded-lg px-2.5 py-2 text-xs leading-relaxed whitespace-nowrap " +
-  "shadow-lg tabular-nums z-[5] [&_b]:block [&_b]:mb-0.5";
-const LEG_CLS = "flex flex-wrap gap-3.5 text-xs text-txt2 mt-0.5 mb-1.5";
-const SW = "inline-block w-3.5 h-[3px] rounded-sm mr-[5px] align-[3px]";
-const SW_DASH = "inline-block w-3.5 h-0 border-t-2 border-dashed mr-[5px] align-[3px]";
 
 function xScale(bars, PL, PR, W) {
   const n = bars.length, iw = (W - PL - PR) / Math.max(1, n);
@@ -453,20 +451,20 @@ const path = (pts) => pts.filter(p => p[1] != null && Number.isFinite(p[1]))
 function drawCharts(data, r) {
   const box = $("#charts");
   if (!box) return;
-  const H3 = "text-[13px] m-0 mb-1 text-txt2 font-semibold";
+  const H3 = "fs-6 fw-semibold text-body-secondary mb-1";
   box.innerHTML = `
     <div>
       <h3 class="${H3}">당일 1분봉 가격 · VWAP · 돌파선</h3>
-      <div class="${LEG_CLS}"><span><i class="${SW}" style="background:var(--text-primary)"></i>종가</span>
-        <span><i class="${SW}" style="background:var(--accent)"></i>VWAP</span>
-        <span><i class="${SW_DASH}" style="border-color:var(--warning)"></i>돌파선 ${fmt(data.pre_high)}</span>
-        <span class="text-txt3">음영: 기록 창(${fmt(data.window_start / 60 + 9)}시대 이후) · 아래 막대: 분당 거래량 (적=상승봉, 청=하락봉)</span></div>
-      <div class="relative" id="price-box"></div>
+      <div class="legend"><span><i class="sw" style="background:var(--text-primary)"></i>종가</span>
+        <span><i class="sw" style="background:var(--accent)"></i>VWAP</span>
+        <span><i class="sw dash" style="border-color:var(--warning)"></i>돌파선 ${fmt(data.pre_high)}</span>
+        <span class="text-body-tertiary">음영: 기록 창 · 아래 막대: 분당 거래량 (적=상승봉, 청=하락봉)</span></div>
+      <div class="position-relative" id="price-box"></div>
     </div>
     <div>
       <h3 class="${H3}">누적 매수세 (매수 추정 − 매도 추정)</h3>
-      <div class="${LEG_CLS}"><span class="text-txt3">우상향이면 매수세가 이어지는 중 · 틱 규칙 추정치</span></div>
-      <div class="relative" id="cvd-box"></div>
+      <div class="legend"><span class="text-body-tertiary">우상향이면 매수세가 이어지는 중 · 틱 규칙 추정치</span></div>
+      <div class="position-relative" id="cvd-box"></div>
     </div>`;
   drawPrice(data.bars, r, data);
   drawCvd(data.bars);
@@ -495,7 +493,7 @@ function drawPrice(bars, r, data) {
     ${pre != null ? `<line x1="${PL}" x2="${W - PR}" y1="${y(pre).toFixed(1)}" y2="${y(pre).toFixed(1)}" stroke="var(--warning)" stroke-width="1.3" stroke-dasharray="5 4"/>` : ""}
     ${timeLabels(bars, cx, H, W)}
     <line id="p-cross" y1="${PT}" y2="${PT + PH + GAP + VH}" stroke="var(--text-muted)" stroke-dasharray="3 3" opacity="0"/>
-  </svg><div class="${TIP_CLS}" id="p-tip"></div>`;
+  </svg><div class="chart-tip" id="p-tip"></div>`;
   hover($("#price-box"), bars, cx, PL, PR, iw, W, "#p-cross", "#p-tip", b =>
     `<b>${b.t}</b>종가 ${fmt(b.c)} · 고 ${fmt(b.h)} · 저 ${fmt(b.l)}<br>VWAP ${fmt(b.vwap)}<br>거래량 ${fmt(b.v)}`);
 }
@@ -516,7 +514,7 @@ function drawCvd(bars) {
     <path d="${path(bars.map((b, i) => [cx(i), b.cvd == null ? null : y(b.cvd)]))}" fill="none" stroke="${lastUp ? "var(--up)" : "var(--down)"}" stroke-width="2"/>
     ${timeLabels(bars, cx, H, W)}
     <line id="c-cross" y1="${PT}" y2="${PT + PH}" stroke="var(--text-muted)" stroke-dasharray="3 3" opacity="0"/>
-  </svg><div class="${TIP_CLS}" id="c-tip"></div>`;
+  </svg><div class="chart-tip" id="c-tip"></div>`;
   hover($("#cvd-box"), bars, cx, PL, PR, iw, W, "#c-cross", "#c-tip", b =>
     `<b>${b.t}</b>누적 매수세 ${b.cvd == null ? "–" : signed(b.cvd, 0) + "주"}`);
 }
@@ -538,9 +536,6 @@ function hover(boxEl, rows, cx, PL, PR, iw, W, crossSel, tipSel, html) {
 }
 
 /* ------------------------------------------------------------------ 포워드 기록 (P3) */
-const TBL = "w-full border-collapse text-[13px] [&_th]:text-left [&_th]:font-semibold [&_th]:text-txt2 " +
-  "[&_th]:px-3 [&_th]:py-2 [&_td]:px-3 [&_td]:py-2 [&_td]:border-t [&_td]:border-line [&_td]:tabular-nums";
-
 async function loadReport(force = false) {
   if (!force && REPORT && Date.now() - REPORT_AT < 30000) return REPORT;
   try {
@@ -555,8 +550,6 @@ async function loadReport(force = false) {
   return REPORT;
 }
 
-const g = (v, d = 2, suffix = "%") => v == null ? "–" : fmt(v, d) + suffix;
-
 async function renderReport() {
   dropGrid();
   VIEW_KIND = "report";
@@ -565,38 +558,41 @@ async function renderReport() {
   const rep = await loadReport();
   if (TAB !== "report" || VIEW_KIND !== "report") return;
   if (rep.error || rep.enabled === false) {
-    $("#rep-root").innerHTML = `<div class="bg-s1 border border-line rounded-xl">${EMPTY(
+    $("#rep-root").innerHTML = `<div class="card">${EMPTY(
       rep.error ? "리포트를 불러오지 못했습니다: " + esc(rep.error) : "기록 파일이 설정되지 않았습니다.")}</div>`;
     return;
   }
   const names = Object.keys(rep.groups);
   const head = ["건수", "승률%(갭,비용후)", "평균갭%", "평균순갭%", "중앙값순갭%", "평균09:30%", "평균종가%", "최악갭%", "t"];
-  const cell = (k, v) => v == null ? "–" : k === "건수" ? fmt(v) : (k.endsWith("%") || k.includes("갭") || k.includes("09:30") || k.includes("종가"))
-    ? `<span class="${k.startsWith("승률") || k === "건수" ? "" : upDown(v)}">${k.startsWith("승률") ? fmt(v, 1) + "%" : signed(v, 2) + "%"}</span>` : fmt(v, 2);
+  const cell = (k, v) => v == null ? "–" : k === "건수" ? fmt(v)
+    : k.startsWith("승률") ? fmt(v, 1) + "%"
+    : k === "t" ? fmt(v, 2)
+    : `<span class="${upDown(v)}">${signed(v, 2)}%</span>`;
   const ready = rep.ready_for_review;
+  const pct2 = (v) => v == null ? "–" : `<span class="${upDown(v)}">${signed(v, 2)}%</span>`;
   $("#rep-root").innerHTML = `
-    <div class="${ready ? "tint-good border-good" : "bg-s1 border-line"} border px-3.5 py-2.5 rounded-[10px] mb-3.5 text-[13px]">
+    <div class="${ready ? "tint-good border-good" : "bg-s1 border-line"} border rounded-3 px-3 py-2 mb-3 small">
       <b>${ready ? "표본 100건 돌파" : "표본 쌓는 중"}</b> — ${esc(rep.note)}
-      <div class="text-txt3 mt-1">기록 후보 ${fmt(rep.recorded)}건 · 진입 판정 ${fmt(rep.recorded_entries)}건 · 결과 대기 ${fmt(rep.pending)}건 ·
+      <div class="text-body-tertiary mt-1">기록 후보 ${fmt(rep.recorded)}건 · 진입 판정 ${fmt(rep.recorded_entries)}건 · 결과 대기 ${fmt(rep.pending)}건 ·
         ${fmt(rep.weeks)}주 · 기록 시점 가격 기준, 왕복 비용 ${fmt(rep.cost * 100, 2)}% 차감(순갭)</div>
     </div>
-    <div class="bg-s1 border border-line rounded-xl overflow-x-auto mb-4">
-      <table class="${TBL}"><thead><tr><th>그룹</th>${head.map(h => `<th class="!text-right">${esc(h.replace("(갭,비용후)", ""))}</th>`).join("")}</tr></thead>
+    <div class="table-responsive border rounded-3 mb-3 bg-s1">
+      <table class="table table-sm align-middle mb-0 tnum gtbl"><thead><tr><th>그룹</th>${head.map(h => `<th>${esc(h.replace("(갭,비용후)", ""))}</th>`).join("")}</tr></thead>
       <tbody>${names.map(n => { const s = rep.groups[n];
-        return `<tr><td class="!tabular-nums-none font-semibold">${esc(n)}</td>${head.map(h =>
-          `<td class="text-right">${s["건수"] ? cell(h, s[h]) : (h === "건수" ? "0" : "–")}</td>`).join("")}</tr>`; }).join("")}</tbody></table>
+        return `<tr><td class="fw-semibold">${esc(n)}</td>${head.map(h =>
+          `<td>${s["건수"] ? cell(h, s[h]) : (h === "건수" ? "0" : "–")}</td>`).join("")}</tr>`; }).join("")}</tbody></table>
     </div>
-    <h3 class="text-[13px] m-0 mb-1.5 text-txt2 font-semibold">주차별 (후보 / 진입)</h3>
-    <div class="bg-s1 border border-line rounded-xl overflow-x-auto mb-4">
-      ${rep.by_session.length ? `<table class="${TBL}"><thead><tr><th>기준일</th><th class="!text-right">후보</th><th class="!text-right">후보 평균순갭</th>
-        <th class="!text-right">진입</th><th class="!text-right">진입 평균순갭</th></tr></thead><tbody>${rep.by_session.map(s => `<tr>
-        <td>${esc(s["기준일"])}</td><td class="text-right">${fmt(s["후보"]["건수"])}</td>
-        <td class="text-right">${s["후보"]["건수"] ? `<span class="${upDown(s["후보"]["평균순갭%"])}">${signed(s["후보"]["평균순갭%"], 2)}%</span>` : "–"}</td>
-        <td class="text-right">${fmt(s["진입"]["건수"])}</td>
-        <td class="text-right">${s["진입"]["건수"] ? `<span class="${upDown(s["진입"]["평균순갭%"])}">${signed(s["진입"]["평균순갭%"], 2)}%</span>` : "–"}</td></tr>`).join("")}</tbody></table>`
-      : EMPTY("아직 결과가 채워진 신호가 없습니다.<br><span class='text-txt3'>금요일 신호는 다음 영업일 장 마감(15:40) 이후 결과가 채워집니다.</span>")}
+    <h3 class="fs-6 fw-semibold text-body-secondary mb-1">주차별 (후보 / 진입)</h3>
+    <div class="table-responsive border rounded-3 mb-3 bg-s1">
+      ${rep.by_session.length ? `<table class="table table-sm align-middle mb-0 tnum gtbl"><thead><tr><th>기준일</th><th>후보</th><th>후보 평균순갭</th>
+        <th>진입</th><th>진입 평균순갭</th></tr></thead><tbody>${rep.by_session.map(s => `<tr>
+        <td>${esc(s["기준일"])}</td><td>${fmt(s["후보"]["건수"])}</td>
+        <td>${s["후보"]["건수"] ? pct2(s["후보"]["평균순갭%"]) : "–"}</td>
+        <td>${fmt(s["진입"]["건수"])}</td>
+        <td>${s["진입"]["건수"] ? pct2(s["진입"]["평균순갭%"]) : "–"}</td></tr>`).join("")}</tbody></table>`
+      : EMPTY("아직 결과가 채워진 신호가 없습니다.<br><span class='text-body-tertiary'>금요일 신호는 다음 영업일 장 마감(15:40) 이후 결과가 채워집니다.</span>")}
     </div>
-    <h3 class="text-[13px] m-0 mb-1.5 text-txt2 font-semibold">개별 기록 (최근 200건)</h3>
+    <h3 class="fs-6 fw-semibold text-body-secondary mb-1">개별 기록 (최근 200건)</h3>
     <div id="rep-grid-box"></div>`;
   if (rep.trades.length) {
     GRID2 = Grid.create(gridHost("#rep-grid-box", "rep-grid"), {
@@ -611,10 +607,10 @@ async function renderReport() {
         { field: "score", headerName: "점수", type: "numericColumn", minWidth: 76 },
         ...[["gap", "다음날 시가"], ["r0930", "09:30"], ["rclose", "종가"], ["low", "장중 최저"]].map(([f, n]) => ({
           field: f, headerName: n, type: "numericColumn", minWidth: 100,
-          cellClass: (p) => "tabular-nums " + upDown(p.value), valueFormatter: (p) => p.value == null ? "–" : signed(p.value * 100, 2) + "%" })),
+          cellClass: (p) => "tnum " + upDown(p.value), valueFormatter: (p) => p.value == null ? "–" : signed(p.value * 100, 2) + "%" })),
       ],
     });
-  } else $("#rep-grid-box").innerHTML = `<div class="bg-s1 border border-line rounded-xl">${EMPTY("기록 없음")}</div>`;
+  } else $("#rep-grid-box").innerHTML = `<div class="card">${EMPTY("기록 없음")}</div>`;
 }
 
 /* ------------------------------------------------------------------ 가이드 · 근거 */
@@ -632,12 +628,7 @@ async function renderGuide() {
   const ev = await loadEvidence();
   if (TAB !== "guide") return;
   const pct = v => v == null ? "–" : fmt(v * 100) + "%";
-  const H3 = "text-[15px] font-semibold mt-6 mb-2.5 pb-1.5 border-b border-line first:mt-0";
-  const CALLOUT = "border-l-[3px] bg-s2 px-4 py-3 rounded-r-lg my-3 text-[13px] [&>b]:block [&>b]:mb-1";
-  const STEP = "bg-s2 rounded-[10px] px-4 py-3.5";
-  const STEP_N = "text-[11px] font-bold text-accent tracking-wider";
-  const STEP_H = "mt-1 mb-1.5 text-[15px] font-semibold";
-  const STEP_UL = "m-0 pl-4 text-[12.5px] text-txt2 list-disc";
+  const H3 = "fs-5 fw-semibold mt-4 mb-2 pb-1 border-bottom";
   const cfgRows = [
     ["기록 대상", "주말을 넘기는 날 (금요일, 금요일 휴장이면 직전 영업일)"],
     ["기록 창", `${c.window_start} ~ ${c.window_end} (15:20~ 종가 단일가 제외)`],
@@ -654,59 +645,59 @@ async function renderGuide() {
   const p0 = ev.proxy;
   const p0html = !p0 ? "" : `
     <h3 class="${H3}">P0 일봉 대리 백테스트 — 조건부</h3>
-    <p class="mb-2.5 text-txt2">${esc(p0.요약)}</p>
-    <div class="overflow-x-auto"><table class="${TBL}"><thead><tr><th>그룹</th><th class="!text-right">건수</th><th class="!text-right">평균 갭</th>
-      <th class="!text-right">비용 후</th><th class="!text-right">승률(비용후)</th></tr></thead><tbody>${p0.그룹.map(r => `<tr>
-      <td>${esc(r.그룹)}</td><td class="text-right">${fmt(r.건수)}</td><td class="text-right">${signed(r.평균갭, 2)}%</td>
-      <td class="text-right"><span class="${upDown(r.순수익)}">${signed(r.순수익, 2)}%</span></td><td class="text-right">${fmt(r.승률, 1)}%</td></tr>`).join("")}</tbody></table></div>
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-4 mt-3">
-      <div><h4 class="text-[13px] m-0 mb-1.5 text-txt2 font-semibold">왕복 비용 민감도 (주말 신호)</h4>
-        <table class="${TBL}"><tbody>${p0.민감도.map(r => `<tr><td>비용 ${fmt(r.비용, 2)}%</td>
-          <td class="text-right"><span class="${upDown(r.순수익)}">${signed(r.순수익, 2)}%</span></td><td class="text-right text-txt3">날짜t ${fmt(r.날짜t, 2)}</td></tr>`).join("")}</tbody></table></div>
-      <div><h4 class="text-[13px] m-0 mb-1.5 text-txt2 font-semibold">연도별 평균 갭 (주말 신호)</h4>
-        <table class="${TBL}"><tbody>${p0.연도별.map(r => `<tr><td>${r.연도}</td><td class="text-right">${fmt(r.건수)}건</td>
-          <td class="text-right">${signed(r.평균갭, 2)}%</td></tr>`).join("")}</tbody></table></div>
+    <p>${esc(p0.요약)}</p>
+    <div class="table-responsive border rounded-3 my-2"><table class="table table-sm align-middle mb-0 tnum gtbl"><thead><tr><th>그룹</th><th>건수</th><th>평균 갭</th>
+      <th>비용 후</th><th>승률(비용후)</th></tr></thead><tbody>${p0.그룹.map(r => `<tr>
+      <td>${esc(r.그룹)}</td><td>${fmt(r.건수)}</td><td>${signed(r.평균갭, 2)}%</td>
+      <td><span class="${upDown(r.순수익)}">${signed(r.순수익, 2)}%</span></td><td>${fmt(r.승률, 1)}%</td></tr>`).join("")}</tbody></table></div>
+    <div class="row g-3 mt-1">
+      <div class="col-12 col-md-6"><h4 class="fs-6 fw-semibold text-body-secondary mb-1">왕복 비용 민감도 (주말 신호)</h4>
+        <table class="table table-sm mb-0 tnum gtbl"><tbody>${p0.민감도.map(r => `<tr><td>비용 ${fmt(r.비용, 2)}%</td>
+          <td><span class="${upDown(r.순수익)}">${signed(r.순수익, 2)}%</span></td><td class="text-body-tertiary">날짜t ${fmt(r.날짜t, 2)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="col-12 col-md-6"><h4 class="fs-6 fw-semibold text-body-secondary mb-1">연도별 평균 갭 (주말 신호)</h4>
+        <table class="table table-sm mb-0 tnum gtbl"><tbody>${p0.연도별.map(r => `<tr><td>${r.연도}</td><td>${fmt(r.건수)}건</td>
+          <td>${signed(r.평균갭, 2)}%</td></tr>`).join("")}</tbody></table></div>
     </div>
-    <div class="${CALLOUT} border-accent"><b>해석</b>${p0.해석.map(esc).join("<br>")}</div>
-    <div class="${CALLOUT} border-warn"><b>이 검증의 한계</b>${p0.한계.map(esc).join("<br>")}</div>
-    <p class="text-xs text-txt3">측정일 ${esc(p0.측정일)} · ${esc(p0.표본)} · 재현: <code>python main.py friday-bt</code></p>`;
-  $("#view").innerHTML = `<div class="bg-s1 border border-line rounded-xl px-5 py-5 leading-[1.75]">
-    <div class="${CALLOUT} border-bad"><b>검증되지 않은 전략 — 관찰 전용입니다</b>
+    <div class="callout accent"><b>해석</b>${p0.해석.map(esc).join("<br>")}</div>
+    <div class="callout warn"><b>이 검증의 한계</b>${p0.한계.map(esc).join("<br>")}</div>
+    <p class="small text-body-tertiary">측정일 ${esc(p0.측정일)} · ${esc(p0.표본)} · 재현: <code>python main.py friday-bt</code></p>`;
+  $("#view").innerHTML = `<div class="card card-body guide px-4 py-4">
+    <div class="callout bad"><b>검증되지 않은 전략 — 관찰 전용입니다</b>
       영상(유튜브 '수익탐정사무소', 데빈 베이커 인터뷰 요약)의 주장은 근거 수치가 없는 일화이고 미국장 맥락입니다.
       한국장 효과는 모릅니다. 점수 배점·컷오프는 경험칙이며, 자동 주문은 하지 않습니다.</div>
 
     <h3 class="${H3}">가설과 판정 흐름</h3>
-    <p class="mb-2.5 text-txt2">"일주일간 조용하던 종목이 금요일 마감 무렵 거래량을 동반해 당일 고점을 뚫으면, 주말을 넘길 큰 자금이
+    <p>"일주일간 조용하던 종목이 금요일 마감 무렵 거래량을 동반해 당일 고점을 뚫으면, 주말을 넘길 큰 자금이
       들어온 것이고 월요일 시초에 갭상승한다." 한국장에서는 15:20~15:30 이 종가 단일가라 돌파를 추격할 수 없어
       <b>${esc(c.window_start)}~${esc(c.window_end)}</b> 만 봅니다.</p>
-    <div class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-3">
-      <div class="${STEP}"><div class="${STEP_N}">STEP 1 · 일봉</div><h4 class="${STEP_H}">조용한 한 주</h4>
-        <ul class="${STEP_UL}"><li>직전 ${c.quiet_days}영업일 변동폭이 작고 거래량이 평소 이하</li><li>금요일 직전까지 시장이 주목하지 않던 종목을 찾는다</li></ul></div>
-      <div class="${STEP}"><div class="${STEP_N}">STEP 2 · 분봉</div><h4 class="${STEP_H}">거래량 급증 + 고점 돌파</h4>
-        <ul class="${STEP_UL}"><li>${esc(c.window_start)} 이후 거래량이 과거 같은 구간의 ${fmt(c.surge_min, 1)}배 이상</li><li>현재가가 창 이전 당일 고점(돌파선) 위</li><li>둘 다 만족하면 <b>후보</b></li></ul></div>
-      <div class="${STEP}"><div class="${STEP_N}">STEP 3 · 필터</div><h4 class="${STEP_H}">수급과 시장</h4>
-        <ul class="${STEP_UL}"><li>VWAP 위 · 매수 우위 · 고가 부근 유지</li><li>상한가 추격(당일 +${pct(c.hot_change)}) 제외</li><li>지수가 MA${c.regime_ma} 아래면 제외</li><li>모두 + 점수 ${c.entry_score_min}점 → <b>🔥진입</b></li></ul></div>
-      <div class="${STEP}"><div class="${STEP_N}">STEP 4 · 청산 가설</div><h4 class="${STEP_H}">월요일 시초</h4>
-        <ul class="${STEP_UL}"><li>월요일 시초~09:30 분할 청산이 기본 가설</li><li>갭하락이면 손절선이 아니라 시초가에 잃는다</li><li>이 화면은 청산도 주문하지 않고, 결과만 기록한다</li></ul></div>
+    <div class="row g-3">
+      <div class="col-12 col-md-6 col-xl-3"><div class="step"><div class="n">STEP 1 · 일봉</div><h4>조용한 한 주</h4>
+        <ul><li>직전 ${c.quiet_days}영업일 변동폭이 작고 거래량이 평소 이하</li><li>금요일 직전까지 시장이 주목하지 않던 종목을 찾는다</li></ul></div></div>
+      <div class="col-12 col-md-6 col-xl-3"><div class="step"><div class="n">STEP 2 · 분봉</div><h4>거래량 급증 + 고점 돌파</h4>
+        <ul><li>${esc(c.window_start)} 이후 거래량이 과거 같은 구간의 ${fmt(c.surge_min, 1)}배 이상</li><li>현재가가 창 이전 당일 고점(돌파선) 위</li><li>둘 다 만족하면 <b>후보</b></li></ul></div></div>
+      <div class="col-12 col-md-6 col-xl-3"><div class="step"><div class="n">STEP 3 · 필터</div><h4>수급과 시장</h4>
+        <ul><li>VWAP 위 · 매수 우위 · 고가 부근 유지</li><li>상한가 추격(당일 +${pct(c.hot_change)}) 제외</li><li>지수가 MA${c.regime_ma} 아래면 제외</li><li>모두 + 점수 ${c.entry_score_min}점 → <b>🔥진입</b></li></ul></div></div>
+      <div class="col-12 col-md-6 col-xl-3"><div class="step"><div class="n">STEP 4 · 청산 가설</div><h4>월요일 시초</h4>
+        <ul><li>월요일 시초~09:30 분할 청산이 기본 가설</li><li>갭하락이면 손절선이 아니라 시초가에 잃는다</li><li>이 화면은 청산도 주문하지 않고, 결과만 기록한다</li></ul></div></div>
     </div>
     ${p0html}
 
     <h3 class="${H3}">포워드 기록은 이렇게 쌓입니다</h3>
-    <ul class="${STEP_UL}">
+    <ul>
       <li>금요일 ${esc(c.window_start)}~${esc(c.window_end)} 사이 종목당 <b>첫 후보 포착</b>과 <b>첫 진입 판정</b> 한 줄씩 <code>out/friday_signals.jsonl</code> 에 기록 (그 시각 현재가가 가정 체결가)</li>
       <li>다음 영업일 15:40 이후 시가·09:30·종가·장중 최저를 채워 <code>out/friday_outcomes.json</code> 에 저장 (한 번 채우면 다시 받지 않음)</li>
       <li>"포워드 기록" 탭이 후보 전체 / 진입 / 15:00 이전·이후 포착을 나눠 보여줍니다 — 영상의 '마감 30분 전(15:00)'과 이 화면의 14:30 시작을 비교하는 용도</li>
       <li>후보 또는 진입 표본이 100건(약 10~12주)을 넘기 전에는 실주문을 검토하지 않습니다</li></ul>
 
     <h3 class="${H3}">알려진 한계</h3>
-    <div class="${CALLOUT} border-warn"><b>월요일 갭하락 위험</b>주말 뉴스·공시·금요일 야간 미국장은 통제할 수 없고 이 시스템에 공시 API 가 없습니다. 토스에서 직접 확인하세요.</div>
-    <div class="${CALLOUT} border-warn"><b>짧은 진입 창과 추정 매수세</b>실질 진입 창은 45분이고, 매수세는 1분봉 틱 규칙 추정치(HTS 체결강도와 다름)입니다.</div>
-    <div class="${CALLOUT} border-warn"><b>휴장 캘린더 없음</b>금요일이 휴장이면 직전 영업일이 기록 대상이지만 자동 판별하지 못합니다. 서버를 <code>--friday-extra-days 2026-10-01</code> 처럼 날짜를 넣어 띄우세요.</div>
+    <div class="callout warn"><b>월요일 갭하락 위험</b>주말 뉴스·공시·금요일 야간 미국장은 통제할 수 없고 이 시스템에 공시 API 가 없습니다. 토스에서 직접 확인하세요.</div>
+    <div class="callout warn"><b>짧은 진입 창과 추정 매수세</b>실질 진입 창은 45분이고, 매수세는 1분봉 틱 규칙 추정치(HTS 체결강도와 다름)입니다.</div>
+    <div class="callout warn"><b>휴장 캘린더 없음</b>금요일이 휴장이면 직전 영업일이 기록 대상이지만 자동 판별하지 못합니다. 서버를 <code>--friday-extra-days 2026-10-01</code> 처럼 날짜를 넣어 띄우세요.</div>
 
     <h3 class="${H3}">현재 기준값</h3>
-    <dl class="grid grid-cols-[repeat(auto-fit,minmax(240px,1fr))] gap-y-2 gap-x-5 m-0">${
-      cfgRows.map(([k, v]) => `<div class="flex justify-between gap-3 pb-1.5 border-b border-dashed border-line text-[13px]">
-        <dt class="text-txt2">${k}</dt><dd class="m-0 font-semibold tabular-nums text-right">${v}</dd></div>`).join("")}</dl>
+    <dl class="row row-cols-1 row-cols-md-2 g-x-4 m-0">${
+      cfgRows.map(([k, v]) => `<div class="col"><div class="d-flex justify-content-between gap-3 pb-1 mb-2 border-bottom small" style="border-bottom-style:dashed !important">
+        <dt class="fw-normal text-body-secondary">${k}</dt><dd class="m-0 fw-semibold tnum text-end">${v}</dd></div></div>`).join("")}</dl>
   </div>`;
 }
 

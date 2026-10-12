@@ -3,13 +3,17 @@
 > 이 문서는 프로젝트 지침서다. **새로 확인된 사실·결정·API 스펙은 여기에 계속 누적 기록한다.**
 
 ## 프로젝트 목표
-두 전략을 한 대시보드에서 돌린다. 상단 GNB 로 화면을 오간다 (브랜드: **왔니 주식**).
-GNB 순서: **세력추정매매 → 볼린저 밴드 반전 매매**.
+세 전략을 한 대시보드에서 돌린다. 상단 GNB 로 화면을 오간다 (브랜드: **왔니 주식**).
+GNB 순서: **세력추정매매 → 볼린저 밴드 반전 매매 → 금요일 마감 돌파**.
 
 1. **세력추정매매** (`/`) — 바닥권에서 대량 거래량을 동반한 윗꼬리 캔들(기준봉/매집봉) 발생 →
    매물 소화(조정) → **전일 고가**를 거래량과 함께 돌파하는 순간을 포착해 KOSPI/KOSDAQ 을 스크리닝.
 2. **볼린저 밴드 반전 매매** (`/bollinger`) — 박스권에서 밴드 하한 + RSI 과매도에 사고
    상한 + 과매수에 파는 평균 회귀 전략. **토스 OpenAPI 로 실제 시장가 매수·매도까지 자동 실행**한다.
+
+3. **금요일 마감 돌파** (`/friday`) — 주말 직전 영업일 14:30~15:15 에 거래량 급증 + 당일 고점 돌파 종목을
+   포착하는 **관찰 전용**(주문 없음) 스크리너. P0 일봉 대리 백테스트 **'조건부'**, 분봉 성과는 포워드 기록 중
+   (아래 "금요일 마감 돌파" 절).
 
 ## 모듈 구조
 | 파일 | 역할 |
@@ -31,13 +35,18 @@ GNB 순서: **세력추정매매 → 볼린저 밴드 반전 매매**.
 | `screener/web.py` | FastAPI 대시보드 + JSON API. 요청마다 세션/서버 스캐너를 골라 쓴다 |
 | `screener/scan_service.py` | `ScanService`·`ScanState` (주기 스캔 스레드). web·sessions 공용 — 순환 import 방지용 분리 |
 | `screener/sessions.py` | 접속자별 토스 API 키 세션 (`SessionManager`·`UserSession`·`SessionSettings`) |
+| `screener/friday.py` | 금요일 마감 돌파 (`FridayConfig`·`evaluate`·`FridayScanner`·`FridayService`·`FridayRecorder`·`build_report`) |
+| `screener/friday_backtest.py` | 금요일 마감 돌파 P0 일봉 대리 백테스트 (`ProxyParams`·`proxy_frame`·`analyze`·`run_proxy_from_cache`) |
+| `screener/intraday.py` | 장중 1분봉 공통 도구 (`session_bars`·`tick_flow`·`vwap`·`clean`, 정규장 시각 상수) |
+| `screener/static/friday.html` | 금요일 마감 돌파 화면 (`/friday`). 포착 종목·포워드 기록·가이드 근거 3탭 (Bootstrap) |
+| `deploy.sh` | 개발서버 rsync 배포 (아래 "개발서버 배포") |
 | `screener/static/dashboard.html` | 세력추정매매 화면 (`/`). vanilla JS + 인라인 SVG 캔들/거래량 차트 |
 | `screener/static/bollinger.html` | 볼린저 반전 매매 화면 (`/bollinger`). 밴드+RSI 인라인 SVG 차트 |
 | `screener/static/ui.js` | **공통 UI 기반** — `UI.cls`(Bootstrap 클래스 묶음: 버튼·폼·카드) + `UI.num/pct/signed/upDown` + `Grid.create()`(AG Grid 헬퍼) |
 | `screener/static/common.css` | **테마 토큰(CSS 변수) → Bootstrap 변수 매핑** + `.text-up/.tint-*/.dot-*` 같은 앱 보조 클래스·AG Grid 미세 규칙·`[hidden]` 가드. Pretendard 폰트 지정 |
 | `screener/static/gnb.js` | **공통 GNB**(왔니 주식 브랜드 + 메뉴) + 테마 토글 |
 | `screener/static/session.js` | **공통 모달 2개** — 🔑 API 키(자격증명) / ⚙ 설정(스캔·알림·주문·자동매수) |
-| `main.py` | CLI: `scan` `watch` `poll` `web` `backtest` `explain` `demo` `bollinger` `adduser` |
+| `main.py` | CLI: `scan` `watch` `poll` `web` `backtest` `explain` `demo` `bollinger` `adduser` `friday` `friday-bt` `friday-report` |
 | `poc.py` | API 없이 도는 최소 동작 예시 |
 | `tests/` | pytest 단위 테스트 (외부 API 불필요) |
 
@@ -160,6 +169,22 @@ GNB 순서: **세력추정매매 → 볼린저 밴드 반전 매매**.
   탐지 엔진만 검증한다. 키 상태는 로그의 `랭킹 후보 N 종목` / `스캔 완료` 로 판단할 것.
 - `.env` 는 이미지에 넣지 않고(`.dockerignore`) `env_file` 로 런타임 주입한다.
 - HEALTHCHECK 는 합성 데이터로 탐지 엔진만 검증하므로 API 자격증명 없이도 통과한다.
+
+## 개발서버 배포 (webhows-dev)
+접속 정보의 단일 출처는 **`/home/jogiclub/git/dev-webhows/.env`** (WSL 경로 `\\wsl.localhost\Ubuntu\home\jogiclub\git\dev-webhows\.env`).
+**비밀번호·키는 이 문서에 옮기지 않는다** — 필요하면 그 파일을 읽을 것.
+- 서버: `192.168.0.19` (호스트명 `webhows-dev`, Ubuntu 26.04), 사용자 `webhows`. **SSH 는 키 로그인만** — `ssh webhows-dev`
+  (`~/.ssh/config` 별칭, 키 `~/.ssh/webhows_dev_ed25519`). Docker/Compose 는 sudo 없이 쓴다.
+- stock-find 위치: `/home/webhows/stock-find` (git 저장소 아님 — **rsync 로 배포**), 컨테이너 `stock-find-web`, 포트 **8083**.
+  같은 서버의 다른 서비스 포트: iwinv-web 8080 · bid-find 8085 · pickme 8087 · youpage 8000/8090 · drawing-mind 8060 · postgres 5433. 겹치지 않게 할 것.
+- 배포: 저장소 루트에서 `./deploy.sh` (먼저 `./deploy.sh -n` 으로 전송 목록만 미리보기). rsync → `docker compose up -d --build web` → `/healthz` 확인.
+  **서버의 `.env` · `cache/`(app.db 계정·설정, 캐시) · `out/`(주문·신호 기록) 은 절대 덮어쓰거나 지우지 않는다** (스크립트가 제외).
+  이 저장소로 옛 원격(wani_stockbot)에서 합쳐진 `app/` `data/` `devserver.*.log` 와 `docs/` 도 보내지 않는다.
+- **배포 전 반드시 서버 사본과 비교할 것.** 2026-10-12 에 서버(10-06 Bootstrap 전환·수급포착 제거)가 로컬 git 보다 앞서 있는 것을 발견했다.
+  서버에서 직접 고친 파일이 있으면 먼저 로컬로 가져와 커밋한 뒤 배포한다 (`rsync -an webhows-dev:stock-find/ ./` 로 차이 확인).
+- **장중(평일 09:00~15:30)에는 재배포를 피한다.** 컨테이너가 재시작되면 메모리 세션이 사라지고 실행 중이던 볼린저 봇이 멈춘다
+  (사용자는 다시 로그인·시작해야 한다). 봇이 도는지는 서버 `out/bollinger.log` 마지막 줄(`봇 시작/정지`)로 확인한다.
+- 운영 시 `.env` 를 고쳤으면 `restart` 가 아니라 `up -d` (위 Docker 절 참고).
 
 ## 볼린저 밴드 반전 매매 (screener/bollinger.py · bollinger_bot.py)
 화면 `/bollinger`, CLI `python main.py bollinger --symbols 005930 --bb-interval 15m`.
@@ -508,6 +533,47 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
   `StockMenu.link(r, text, cls)` 로 셀을 만들고 행 클릭에서 `StockMenu.fromEvent(ev, 코드, 이름)` 가
   true 면 상세 열기를 건너뛴다. 스타일(`button.stock`·`.menu-list`)은 `common.css` 에 있다.
 
+## 금요일 마감 돌파 (screener/friday.py · friday_backtest.py)
+화면 `/friday`, CLI `python main.py friday | friday-bt | friday-report`. 기획서 `docs/금요일마감매매_기획.md`.
+**주문을 내지 않는 관찰 전용**이다. 출처는 유튜브 '수익탐정사무소'(데빈 베이커 인터뷰 요약) — 근거 수치 없는 일화이고 미국장 맥락이라 가설로만 취급한다.
+
+### 한국장 조정
+- 마감 30분 전 = 15:00. 15:20~15:30 은 종가 단일가라 돌파 추격 불가 → 기록 창은 `window_start` 14:30 ~ `window_end` **15:15**,
+  15:15 이후 봉은 판정에서 자른다(`evaluate`). `early_cut` 15:00 이전/이후 포착을 따로 집계해 영상 기준과 비교한다.
+- '금요일' = 주말을 넘기는 날. **휴장 캘린더가 없어** 금요일이 휴장인 주는 `--friday-extra-days 2026-10-01` 로 직전 영업일을 직접 넣는다.
+
+### P0 일봉 대리 백테스트 (2026-10-11, 3년 · 2,603종목) — 판정 **조건부**
+- 신호: 직전 4일 변동폭 ≤12%·거래량 ≤20일평균, 당일 거래량 ≥2배, 종가가 고가 2% 이내 + 직전 4일 고가 돌파. 수익 = 신호일 종가 → **다음 영업일 시가**.
+- 주말 신호 984건 평균 갭 **+0.63%**, 주중 신호 +0.33%, 신호 없는 주말 +0.09%. 주말−주중 +0.29%p(Welch t 3.51), 주말−기본 +0.54%p(t 7.05).
+- **왕복 비용 0.75%(수수료 0.15%+슬리피지 0.3%×2) 에서는 평균 순수익 −0.12%.** 손익분기 비용 0.63%. 비용 0.3% 에서 날짜t 1.94, 0.5% 에서 우위 소멸.
+- 연도별 평균 갭 0.92%(2023) → 0.53 → 0.45 → 0.43%(2026) **해마다 감소**. 낙관 편향: 종가 진입 가정, 동시호가 마감 종목 혼입.
+- 판정 규칙(`PASS_RULE`): 평균 순수익>0 · 날짜t≥2 · 주중 대비 Welch t≥1.65 · 연도 2/3 이상 양(+) 모두 충족해야 '통과'.
+  총수익 우위만 있고 순손실이면 '조건부'. 수치의 단일 출처는 `evidence.FRIDAY_PROXY` (`/api/friday/evidence`) — HTML 에 하드코딩 금지.
+- 같은 날짜 신호는 시장 움직임을 공유 → 종목 t 가 아니라 **날짜별 평균의 t** 로 판정한다. `friday-bt` 는 일봉 캐시(`cache/candles/*_880.json`)만 읽는 오프라인 명령이다.
+
+### 판정 (`evaluate`) — 공통 분봉 도구는 `screener/intraday.py`
+(수급포착 제거 때 `supply.py` 에서 떼어 낸 `session_bars`·`tick_flow`·`vwap`·`clean` 등. `TossDataLoader` 의 `turnover_leaders`·`metas`·`session_minutes`·`minute_profile`·`price_at` 도 금요일 마감용으로 다시 넣었다 — 수급포착은 되살리지 않는다.)
+
+- **후보** = 창 거래량이 과거 5영업일 같은 구간 평균의 ≥2배 AND 현재가 > 창 이전 당일 고점(돌파선).
+  과거 분봉이 2일 미만이면 **근사하지 않고 제외**한다(일평균으로 근사하지 않는다).
+- **진입** = 후보 AND 조용한 한 주 AND VWAP 위 AND 매수 우위(≥55%) AND 고점 부근(≥고가 99%) AND 과열 아님(당일 <+20%)
+  AND 지수 국면 우호(KOSPI/KOSDAQ 종가>MA20, 지수 조회 실패는 '미확인'으로 통과) AND 점수 ≥70. 점수·컷오프는 **경험칙(미검증)**.
+- 과거 '평소' 거래량은 `minute_profile(sym, day, 375)` (09:00+375분=15:15 에서 끝나는 최근 200개 봉)을 쓴다.
+  토스 1분봉 한 페이지가 200개라 창(45분) 구간만 안전하게 덮는다 — 09:00 부터의 누적은 못 구한다.
+- 후보 풀은 `turnover_leaders` 거래대금 상위 100 + ETF·우선주·거래정지 제외. 조용하다가 터진 종목이 대금 상위 밖이면 놓친다(한계).
+
+### P1 기록 · P3 결과 (`FridayRecorder`)
+- 신호 `out/friday_signals.jsonl`: 창 안(기록 대상 요일)에서 종목당 **첫 후보(kind=candidate)·첫 진입(kind=entry)** 한 줄씩. 가격 = 그 시각 현재가(가정 체결가).
+  재시작해도 중복되지 않는다(파일을 읽어 `_seen` 복원). 로그인 세션은 `out/users/<아이디>/friday_signals.jsonl`.
+- 결과 `out/friday_outcomes.json`: 다음 영업일 시가·09:30(`loader.price_at`)·종가·고저. **다음 영업일 15:40 이후**에만 채우고(미마감 방지) 한 번 채우면 다시 받지 않는다.
+  서비스가 30분마다 `maybe_fill`, CLI `friday-report` 가 수동으로 채운다.
+- 리포트(`build_report`, `GET /api/friday/report`): 후보 전체/진입/15:00 이전·이후, 주차별, 개별 기록. 수익은 기록가 기준, 순갭 = 갭 − 0.75%.
+  **표본 100건 전에는 실주문을 검토하지 않는다**(`ready_for_review`).
+- `FridayService`: 기록 창(대상 요일 14:25~15:20)엔 `--friday-interval` 초(60), 그 밖엔 30분. 세션마다 1개(수급과 동일), API `GET /api/friday/{state,chart/{symbol},report,evidence}` · `POST /api/friday/scan`.
+
+### 실주문은 아직 없다
+P4(실주문)는 범위 밖이다. 하더라도 기존 3중 게이트·정규장 한정·보수적 크기를 유지하고, 월요일 시초 갭하락은 손절선이 아니라 시초가에서 잃는다는 점을 전제로 한다.
+
 ## 세력추정매매 자동 매수 (screener/autobuy.py)
 - ⚙설정 → 주문 칸의 **"세력추정매매 시그널 자동 매수"** 체크 + `[점수] 이상` + `[금액]원`.
   `SessionSettings.auto_buy / auto_buy_score(기본 75) / auto_buy_amount` 로 계정 DB 에 저장된다.
@@ -549,6 +615,7 @@ CLI `--profile tuned|spec` (기본 `tuned`). 파라미터를 바꾸면 **반드�
 - 주석·출력 문구는 한국어로 통일한다.
 
 ## 변경 이력
+- 2026-10-12: **금요일 마감 돌파 추가 (P0~P3, 관찰 전용)** + **서버 사본 역반영.** 서버(10-06 Bootstrap·수급포착 제거)가 로컬 git 보다 앞서 있어 서버 코드를 기준선으로 가져온 뒤 그 위에 얹었다. `friday_backtest.py`(일봉 대리 백테스트, 판정 '조건부')·`friday.py`(스캐너·서비스·포워드 기록·결과 채우기·리포트)·`intraday.py`(공통 분봉 도구)·`/friday`(Bootstrap 3탭)·`/api/friday/*`·GNB 메뉴·CLI `friday`/`friday-bt`/`friday-report`·`--friday-extra-days`/`--friday-interval`·`evidence.FRIDAY_PROXY`·`deploy.sh`·"개발서버 배포" 지침. 원격 `jogiclub/wani_stockbot` main 과 이력 통합. 테스트 253개 통과.
 - 2026-10-06: **Tailwind → Bootstrap 5.3 + Pretendard 전환, 수급포착매매 완전 제거.** 화면 3개(dashboard·bollinger·login)와
   공통 JS(gnb·session·stockmenu·offcanvas)를 Bootstrap 마크업으로 재작성, 모달=Bootstrap Modal, 상세=Bootstrap Offcanvas
   (세력추정은 하단 시트). 테마는 `data-bs-theme`. 수급포착(`supply.py`·`/supply`·`/api/supply/*`·`main.py supply`·
