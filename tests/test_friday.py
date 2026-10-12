@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import date, datetime
 
 import numpy as np
@@ -372,6 +373,10 @@ def client(tmp_path):
     app = create_app(None, friday=svc)
     with TestClient(app) as c:
         svc.scan_once()
+        # lifespan 이 시작한 백그라운드 스캔 루프가 끝날 때까지 기다린다 (동시 스캔이면 POST /scan 이 409)
+        deadline = time.monotonic() + 15
+        while svc.state.running and time.monotonic() < deadline:
+            time.sleep(0.05)
         yield c
 
 
