@@ -39,7 +39,7 @@ GNB 순서: **세력추정매매 → 볼린저 밴드 반전 매매 → 금요�
 | `screener/friday_backtest.py` | 금요일 마감 돌파 P0 일봉 대리 백테스트 (`ProxyParams`·`proxy_frame`·`analyze`·`run_proxy_from_cache`) |
 | `screener/intraday.py` | 장중 1분봉 공통 도구 (`session_bars`·`tick_flow`·`vwap`·`clean`, 정규장 시각 상수) |
 | `screener/static/friday.html` | 금요일 마감 돌파 화면 (`/friday`). 포착 종목·포워드 기록·가이드 근거 3탭 (Bootstrap) |
-| `deploy.sh` | 개발서버 rsync 배포 (아래 "개발서버 배포") |
+| `deploy.sh` · `ship.sh` | 개발서버 rsync 배포 · 테스트+푸시+배포 한 번에 (아래 "개발서버 배포") |
 | `screener/static/dashboard.html` | 세력추정매매 화면 (`/`). vanilla JS + 인라인 SVG 캔들/거래량 차트 |
 | `screener/static/bollinger.html` | 볼린저 반전 매매 화면 (`/bollinger`). 밴드+RSI 인라인 SVG 차트 |
 | `screener/static/ui.js` | **공통 UI 기반** — `UI.cls`(Bootstrap 클래스 묶음: 버튼·폼·카드) + `UI.num/pct/signed/upDown` + `Grid.create()`(AG Grid 헬퍼) |
@@ -179,11 +179,16 @@ GNB 순서: **세력추정매매 → 볼린저 밴드 반전 매매 → 금요�
   같은 서버의 다른 서비스 포트: iwinv-web 8080 · bid-find 8085 · pickme 8087 · youpage 8000/8090 · drawing-mind 8060 · postgres 5433. 겹치지 않게 할 것.
 - 배포: 저장소 루트에서 `./deploy.sh` (먼저 `./deploy.sh -n` 으로 전송 목록만 미리보기). rsync → `docker compose up -d --build web` → `/healthz` 확인.
   **서버의 `.env` · `cache/`(app.db 계정·설정, 캐시) · `out/`(주문·신호 기록) 은 절대 덮어쓰거나 지우지 않는다** (스크립트가 제외).
-  이 저장소로 옛 원격(wani_stockbot)에서 합쳐진 `app/` `data/` `devserver.*.log` 와 `docs/` 도 보내지 않는다.
+  `docs/`·배포 스크립트도 보내지 않는다.
 - **배포 전 반드시 서버 사본과 비교할 것.** 2026-10-12 에 서버(10-06 Bootstrap 전환·수급포착 제거)가 로컬 git 보다 앞서 있는 것을 발견했다.
   서버에서 직접 고친 파일이 있으면 먼저 로컬로 가져와 커밋한 뒤 배포한다 (`rsync -an webhows-dev:stock-find/ ./` 로 차이 확인).
 - **장중(평일 09:00~15:30)에는 재배포를 피한다.** 컨테이너가 재시작되면 메모리 세션이 사라지고 실행 중이던 볼린저 봇이 멈춘다
   (사용자는 다시 로그인·시작해야 한다). 봇이 도는지는 서버 `out/bollinger.log` 마지막 줄(`봇 시작/정지`)로 확인한다.
+- **커밋·푸시를 요청받으면 개발서버 반영까지 이어서 한다 (사용자 상시 지시, 2026-10-12).** 순서는 `git commit` → `./ship.sh`
+  (테스트 → `git push origin main` → `./deploy.sh`). 푸시가 실패하면 배포하지 않고, 배포 뒤에는 `/healthz` 응답과
+  `docker logs stock-find-web` 로 기동을 확인해 보고한다. `origin` 은 `git@github.com:jogiclub/wani_stockbot.git`(SSH 키 로그인).
+  git 에는 푸시 *뒤* 에 도는 훅이 없고 서버(192.168.0.19)는 사내망이라 GitHub Actions 로는 닿지 않으므로, 이 스크립트가 자동화의 전부다.
+  단, 평일 09:00~15:30 에 볼린저 봇이 실행 중이면(위 항목) 재시작이 봇을 멈추므로 사용자에게 먼저 알리고 진행한다.
 - 운영 시 `.env` 를 고쳤으면 `restart` 가 아니라 `up -d` (위 Docker 절 참고).
 
 ## 볼린저 밴드 반전 매매 (screener/bollinger.py · bollinger_bot.py)
@@ -615,6 +620,7 @@ P4(실주문)는 범위 밖이다. 하더라도 기존 3중 게이트·정규장
 - 주석·출력 문구는 한국어로 통일한다.
 
 ## 변경 이력
+- 2026-10-12: 원격에서 합쳐진 옛 wani_stockbot 파일(`app/` `data/` `.idea/` `devserver.*.log`) 삭제, `ship.sh` 추가 + 커밋·푸시 시 개발서버 반영 지침.
 - 2026-10-12: **금요일 마감 돌파 추가 (P0~P3, 관찰 전용)** + **서버 사본 역반영.** 서버(10-06 Bootstrap·수급포착 제거)가 로컬 git 보다 앞서 있어 서버 코드를 기준선으로 가져온 뒤 그 위에 얹었다. `friday_backtest.py`(일봉 대리 백테스트, 판정 '조건부')·`friday.py`(스캐너·서비스·포워드 기록·결과 채우기·리포트)·`intraday.py`(공통 분봉 도구)·`/friday`(Bootstrap 3탭)·`/api/friday/*`·GNB 메뉴·CLI `friday`/`friday-bt`/`friday-report`·`--friday-extra-days`/`--friday-interval`·`evidence.FRIDAY_PROXY`·`deploy.sh`·"개발서버 배포" 지침. 원격 `jogiclub/wani_stockbot` main 과 이력 통합. 테스트 253개 통과.
 - 2026-10-06: **Tailwind → Bootstrap 5.3 + Pretendard 전환, 수급포착매매 완전 제거.** 화면 3개(dashboard·bollinger·login)와
   공통 JS(gnb·session·stockmenu·offcanvas)를 Bootstrap 마크업으로 재작성, 모달=Bootstrap Modal, 상세=Bootstrap Offcanvas

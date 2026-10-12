@@ -17,12 +17,12 @@ SRC=$(mktemp -d)
 trap 'rm -rf "$SRC"' EXIT
 git -c core.autocrlf=false archive HEAD | tar -x -C "$SRC"
 
-# 원격 main 에서 합쳐진 옛 wani_stockbot 파일(app/ data/ devserver 로그)과 로컬 전용 파일은 보내지 않는다.
+# 서버 데이터(.env cache/ out/)와 개발 문서(docs/)는 보내지 않는다.
 rsync -az $DRY --delete --itemize-changes \
   --exclude '.git' --exclude '.idea' --exclude '.venv' --exclude '.venv-linux' \
   --exclude '__pycache__' --exclude '*.pyc' --exclude '*:Zone.Identifier' \
   --exclude '.env' --exclude 'cache/' --exclude 'out/' \
-  --exclude '/app/' --exclude '/data/' --exclude '/devserver.*.log' --exclude '/docs/' \
+  --exclude '/docs/' --exclude 'deploy.sh' --exclude 'ship.sh' \
   "$SRC/" "$HOST:$DIR/"
 
 [ -n "$DRY" ] && { echo "(미리보기만 했습니다)"; exit 0; }
